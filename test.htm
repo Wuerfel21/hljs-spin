@@ -1,0 +1,2203 @@
+<!DOCTYPE html>
+
+<head>
+    <link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@10.5.0/build/styles/default.min.css">
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@10.5.0/build/highlight.min.js"></script>
+    <script src="spin.js"></script>
+    <script>hljs.initHighlightingOnLoad();</script>
+</head>
+<body>
+    <p>
+        Bla bla
+    </p>
+    <pre><code>
+        #include "stdio.h"
+        void anus(int aaa) {
+            int onek = 1;
+            printf("onek $d",aaa + 1);
+        }
+    </code></pre>
+    <pre><code>
+        cd ../onek
+        pause
+        dir
+    </code></pre>
+    <pre><code>
+PUB main (abc,d) : onek | byte test
+  onek := negx
+    </code></pre>
+    <pre><code>
+#define TEST 1
+#include "test.spin"
+{{
+    *****************************************
+    * Frequency Synthesizer demo v1.1       *
+    * Author: Beau Schwabe                  *
+    * Copyright (c) 2007 Parallax           *
+    * See end of file for terms of use.     *
+    *****************************************
+        Original Author: Chip Gracey
+        Modified by Beau Schwabe
+    *****************************************
+    }}
+    {
+    Revision History:
+                        Version 1.0   -    original file created
+                        
+                        Version 1.1   -    For Channel &quot;B&quot; there was a typo in the &apos;Synth&apos; object
+                                            The line that reads...
+                                            DIRB[Pin]~~                        &apos;make pin output
+                                            ...should read...  
+                                            DIRA[Pin]~~                        &apos;make pin output
+    }
+    PUB Synth(CTR_AB, Pin, Freq) | s, d, ctr, frq '' test
+    
+        Freq := Freq #&gt; 0 &lt;# 128_000_000     &apos;limit frequency range
+        
+        if Freq &lt; 500_000                    &apos;if 0 to 499_999 Hz,
+        ctr := constant(%00100 &lt;&lt; 26)      &apos;..set NCO mode
+        s := 1                             &apos;..shift = 1
+        else                                 &apos;if 500_000 to 128_000_000 Hz,
+        ctr := constant(%00010 &lt;&lt; 26)      &apos;..set PLL mode
+        d := &gt;|((Freq - 1) / 1_000_000)    &apos;determine PLLDIV
+        s := 4 - d                         &apos;determine shift
+        ctr |= d &lt;&lt; 23                     &apos;set PLLDIV
+        
+        frq := fraction(Freq, CLKFREQ, s)    &apos;Compute FRQA/FRQB value
+        ctr |= Pin                           &apos;set PINA to complete CTRA/CTRB value
+    
+        if CTR_AB == &quot;A&quot;
+            CTRA := ctr                        &apos;set CTRA
+            FRQA := frq                        &apos;set FRQA                   
+            DIRA[Pin]~~                        &apos;make pin output
+            
+        if CTR_AB == &quot;B&quot;
+            CTRB := ctr                        &apos;set CTRB
+            FRQB := frq                        &apos;set FRQB                   
+            DIRA[Pin]~~                        &apos;make pin output
+    
+    PRI   fraction (a, b, shift) : f
+    
+        if shift &gt; 0                         &apos;if shift, pre-shift a or b left
+        a &lt;&lt;= shift                        &apos;to maintain significant bits while 
+        if shift &lt; 0                         &apos;insuring proper result
+        b &lt;&lt;= -shift
+        
+        repeat 32                            &apos;perform long division of a/b
+        f &lt;&lt;= 1
+        if a =&gt; b
+            a -= b
+            f++           
+        a &lt;&lt;= 1
+    DAT
+    {{
+    &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+    &boxv;                                                   TERMS OF USE: MIT License                                                  &boxv;
+    &boxvr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvl;
+    &boxv;Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation    &boxv;
+    &boxv;files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy,    &boxv;
+    &boxv;modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software&boxv;
+    &boxv;is furnished to do so, subject to the following conditions:                                                                   &boxv;
+    &boxv;                                                                                                                              &boxv;
+    &boxv;The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.&boxv;
+    &boxv;                                                                                                                              &boxv;
+    &boxv;THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE          &boxv;
+    &boxv;WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR         &boxv;
+    &boxv;COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,   &boxv;
+    &boxv;ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                         &boxv;
+    &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+    }}    
+    </code></pre>
+    
+    <pre><code>
+_CLKMODE = XTAL1 + PLL2X
+{{
+&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhd;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhd;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhd;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+&boxv; Stereo Spatializer v1.0                   &boxv; by Chip Gracey &boxv; Copyright (c) 2006 Parallax, Inc. &boxv; 26 October 2006 &boxv;
+&boxvr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvl;
+&boxv;                                                                                                                  &boxv;
+&boxv; This object spatializes up to four monaural audio sample streams into a time-conscious stereo sound field with   &boxv;
+&boxv; angle and depth controls for each channel. It requires one cog and at least 80 MHz.                              &boxv; 
+&boxv;                                                                                                                  &boxv; 
+&boxv; The stereo spatializer is controlled via 13 single-word parameters which must reside in the parent object:       &boxv;                                                                                      
+&boxv;                                                                                                                  &boxv; 
+&boxv; VAR word input[4]    &apos;pointers to longs which receive sample streams for each channel (0 = disable)              &boxv; 
+&boxv; VAR word angle[4]    &apos;angles for each channel (0..32768..65535 = left..center..right)                            &boxv; 
+&boxv; VAR word depth[4]    &apos;depths for each channel (0..65535 = near..far)                                             &boxv; 
+&boxv; VAR word knobs       &apos;bit fields for controlling depth decay, echoes, and dither                                 &boxv; 
+&boxv;                                                                                                                  &boxv; 
+&boxv; The &apos;input&apos; words are used to point the spatializer to longs which are receiving 32-bit monaural sample streams  &boxv; 
+&boxv; in real-time (preferably at a matching 20KHz sample rate). Any time an input is set to 0, that channel will be   &boxv;    
+&boxv; disabled.                                                                                                        &boxv; 
+&boxv;                                                                                                                  &boxv; 
+&boxv; The &apos;angle&apos; words determine where, from left to right, the corresponding inputs will be placed within the sound  &boxv; 
+&boxv; field. This is achieved by using the sine of the angle (as &pm;90 degrees) to compute a complimentary 0..3dB decay  &boxv; 
+&boxv; and &pm;350&micro;s-maximum delay for each ear. For example, when the angle is all the way left, the left channel         &boxv; 
+&boxv; receives a -0dB signal with a -350&micro;s delay, while the right channel receives a -3dB signal with a +350&micro;s delay.  &boxv; 
+&boxv; When the angle is exactly center, both channels receive a -1.5dB signal with a 0&micro;s delay. The spatializer        &boxv; 
+&boxv; maintains its own internal angles which &apos;chase&apos; the angle words at a rate of 1.76 degrees per millisecond to     &boxv; 
+&boxv; avoid audible discontinuities in the sample delay buffer.                                                        &boxv;                 
+&boxv;                                                                                                                  &boxv; 
+&boxv; The &apos;depth&apos; words determine how far away the corresponding inputs will be placed into the sound field. This is   &boxv; 
+&boxv; achieved by logarithmically decaying the input samples by the depth and then summing them into the delay buffer  &boxv; 
+&boxv; using depth / 16 (limited to buffer size - 16) as a whole-sample offset.  This creates a time delay before a     &boxv; 
+&boxv; sample will be heard, but more importantly allows for doppler shifts to occur when the depths are changed. Note  &boxv; 
+&boxv; that the spatializer&apos;s 20KHz input/output sample rate has a period of 50&micro;s, which is far too coarse for a        &boxv; 
+&boxv; natural-sounding delay step. The unit of depth delay is 1/16 of a sample period, or 3.125&micro;s. This provides good  &boxv; 
+&boxv; depth resolution which fills a word, but is still inadequate for a natural-sounding delay step. Internally,      &boxv; 
+&boxv; delay is tracked in base units of 1/256 of a sample period, or 195ns &boxh;&boxh; a time in which sounds travels only      &boxv; 
+&boxv; 67&micro;m! To realize this resolution, input samples are apportioned into two parts and then summed into adjacent     &boxv; 
+&boxv; samples in the delay buffer. The spatializer maintains its internal high-resolution depths by &apos;chasing&apos; the      &boxv; 
+&boxv; depth words using a difference-driven, dampened acceleration algorithm. This insures that pitch changes          &boxv; 
+&boxv; resulting from doppler shifts occur very smoothly and continuously in response to the depth words being modified &boxv; 
+&boxv; over time.                                                                                                       &boxv; 
+&boxv;                                                                                                                  &boxv; 
+&boxv; The &apos;knobs&apos; word contains four 3-bit fields which are arranged as follows: %NNN_XXX_PPP_DDD                      &boxv; 
+&boxv;                                                                                                                  &boxv; 
+&boxv;            &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhd;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhd;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhd;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhd;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;                          &boxv; 
+&boxv;            &boxv; knobs &boxv;  %NNN  &boxv;    %XXX    &boxv;     %PPP      &boxv;            %DDD            &boxv;                          &boxv; 
+&boxv;            &boxvr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvl;                          &boxv; 
+&boxv;            &boxv; value &boxv; dither &boxv; cross echo &boxv; parallel echo &boxv;      depth decay rate      &boxv;                          &boxv; 
+&boxv;            &boxvr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvl;                          &boxv; 
+&boxv;            &boxv;  000  &boxv; -24dB  &boxv;   -24dB    &boxv;     -24dB     &boxv; -3dB per 32768 depth units &boxv;                          &boxv; 
+&boxv;            &boxv;  001  &boxv; -27dB  &boxv;   -21dB    &boxv;     -21dB     &boxv; -3dB per 16384 depth units &boxv;                          &boxv; 
+&boxv;            &boxv;  010  &boxv; -30dB  &boxv;   -18dB    &boxv;     -18dB     &boxv; -3dB per 8192 depth units  &boxv;                          &boxv; 
+&boxv;            &boxv;  011  &boxv; -33dB  &boxv;   -15dB    &boxv;     -15dB     &boxv; -3dB per 4096 depth units  &boxv;                          &boxv; 
+&boxv;            &boxv;  100  &boxv; -36dB  &boxv;   -12dB    &boxv;     -12dB     &boxv; -3dB per 2048 depth units  &boxv;                          &boxv; 
+&boxv;            &boxv;  101  &boxv; -39dB  &boxv;   -9dB     &boxv;     -9dB      &boxv; -3dB per 1024 depth units  &boxv;                          &boxv; 
+&boxv;            &boxv;  110  &boxv; -42dB  &boxv;   -6dB     &boxv;     -6dB      &boxv; -3dB per 512 depth units   &boxv;                          &boxv; 
+&boxv;            &boxv;  111  &boxv; -45dB  &boxv;   -3dB     &boxv;     -3dB      &boxv; -3dB per 256 depth units   &boxv;                          &boxv; 
+&boxv;            &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;                          &boxv; 
+&boxv;                                                                                                                  &boxv; 
+&boxv; When starting the spatializer, you must give it a buffer of longs to be used as a stereo sample delay. The size  &boxv; 
+&boxv; of this buffer must range from 16 to 4096 longs. With the minimal 16 longs, you&apos;ll have only enough buffer for   &boxv; 
+&boxv; the ear-to-ear delays needed for directional cuing. Your depth delay will be stuck at 0. To be able to generate  &boxv; 
+&boxv; depth delays, doppler shifts, and significant echoes, you will need to increase the buffer size. For every extra &boxv; 
+&boxv; 18 longs, you&apos;ll get ~1 foot (0.9ms) of depth delay. For every extra 58 longs, you&apos;ll get ~1 meter (2.9ms) of    &boxv; 
+&boxv; depth delay. The maximum extra 4080 longs (4096 total) will yield a depth delay of ~230 feet or ~70 meters,      &boxv; 
+&boxv; which is 204ms. Regardless of your buffer size, you can always specify depths up to 65535 to achieve depth       &boxv; 
+&boxv; decay.  However, for depth delay purposes, the maximum usable depth value will be (buffer size - 16) * 16.       &boxv;                            
+&boxv;                                                                                                                  &boxv; 
+&boxv; The spatializer generates stereo audio samples at a continuous rate of 20KHz. Samples may be output to pins via  &boxv; 
+&boxv; delta-modulation for either RC filtering or direct transducer driving. In this case, 4x-oversampled dither is    &boxv; 
+&boxv; used to eliminate both quantization noise from delta-modulation and pico-second jitter noise from on-chip        &boxv; 
+&boxv; crosstalk between nearby pins. Normally, these two noise sources generate distracting buzzes, whines, and hash,  &boxv; 
+&boxv; but dithering removes them in exchange for lower-level white noise which does not draw your attention. The       &boxv; 
+&boxv; dither level can be adjusted through the &apos;knobs&apos; word. You can turn it way down way to hear what almost no       &boxv; 
+&boxv; dither sounds like. Aside from outputting to pins, sample pairs are always streamed into a special long so that  &boxv; 
+&boxv; other objects can access them in real-time.                                                                      &boxv;                                  
+&boxv;                                                                                                                  &boxv; 
+&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;                                       
+                                                                                                                                                
+}}                                                                                                                                            
+VAR                                                                                                                                           
+                                                                                                                                                
+    long  cog                                                                                                                                   
+                                                                                                                                                
+    long  args[3], samples                                &apos;4 longs    ...must be                                                                
+    long  dira_, dirb_, ctra_, ctrb_, cnt_                &apos;5 longs    ...contiguous                                                             
+
+CON
+    TESTCON = 1
+    _XINFREQ = 2
+                                                                                                                                                
+PUB start(settings_ptr, buffer_ptr, buffer_size, lpos_pin, lneg_pin, rpos_pin, rneg_pin) : okay | i                                           
+                                                                                                                                                
+&apos;&apos; Start stereo spatializer driver - starts a cog                                                                                             
+&apos;&apos; returns false if no cog available                                                                                                          
+&apos;&apos;                                                                                                                                            
+&apos;&apos;   settings_ptr = pointer to settings (13 words)                                                                                            
+&apos;&apos;     buffer_ptr = pointer to buffer (16 to 4096 longs)                                                                                      
+&apos;&apos;    buffer_size = number of longs in buffer                                                                                                 
+&apos;&apos;       lpos_pin = left positive delta-modulation pin (-1 to disable)                                                                        
+&apos;&apos;       lneg_pin = left negative delta-modulation pin (lpos_pin must also be enabled, -1 to disable)                                         
+&apos;&apos;       rpos_pin = right positive delta-modulation pin (-1 to disable)                                                                       
+&apos;&apos;       rneg_pin = right negative delta-modulation pin (rpos_pin must also be enabled, -1 to disable)                                        
+                                                                                                                                                
+    &apos;Reset driver                                                                                                                               
+    stop                                                                                                                                        
+                                                                                                                                                
+    &apos;Remember arguments                                                                                                                         
+    longmove(@args, @settings_ptr, 3)                                                                                                           
+                                                                                                                                                
+    &apos;If delta-modulation pin(s) enabled, ready output(s) and ready ctra/ctrb for duty mode                                                      
+    repeat i from 0 to 2 step 2                                                                                                                 
+    if lpos_pin[i] &gt; -1                                                                                                                       
+        dira_[lpos_pin[i] &gt;&gt; 5 &amp; 1] |= |&lt; lpos_pin[i]                                                                                           
+        ctra_[i &gt;&gt; 1] := $18000000 + lpos_pin[i] &amp; $3F                                                                                          
+        if lneg_pin[i] &gt; -1                                                                                                                     
+        dira_[lneg_pin[i] &gt;&gt; 5 &amp; 1] |= |&lt; lneg_pin[i]                                                                                         
+        ctra_[i &gt;&gt; 1] += $04000000 + (lneg_pin[i] &amp; $3F) &lt;&lt; 9                                                                                 
+                                                                                                                                                
+    &apos;Ready 20KHz sample period                                                                                                                  
+    cnt_ := clkfreq / 20_000                                                                                                                    
+                                                                                                                                                
+    &apos;Launch spatializer cog                                                                                                                     
+    return cog := cognew(@entry, @samples) + 1                                                                                                  
+                                                                                                                                                
+                                                                                                                                                
+PUB stop                                                                                                                                      
+                                                                                                                                                
+&apos;&apos; Stop stereo spatializer driver - frees a cog                                                                                               
+                                                                                                                                                
+    &apos;If already running, stop spatializer cog                                                                                                   
+    if cog                                                                                                                                      
+    cogstop(cog~ -  1)                                                                                                                        
+                                                                                                                                                
+    &apos;Reset variables                                                                                                                            
+    longfill(@dira_, 0, 4)                                                                                                                      
+                                                                                                                                                
+                                                                                                                                                
+PUB sample_ptr : ptr                                                                                                                          
+                                                                                                                                                
+&apos;&apos; Returns the address of the long which receives the stereo audio samples in real-time                                                       
+&apos;&apos; (two signed 16-bit values updated at 20KHz - left in top word, right in bottom word)                                                       
+                                                                                                                                                
+    return @samples                                                                                                                             
+                                                                                                                                                
+                                                                                                                                                
+DAT                                                                                                                                           
+                                                                                                                                                
+&apos; &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;                                                                                                                        
+&apos; &boxv;  Initialization  &boxv;                                                                                                                        
+&apos; &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;                                                                                                                        
+                                                                                                                                                
+entry                   org                                                                                                                   
+                                                                                                                                                
+:zero                   mov     reserves,#0             &apos;zero all reserved data                                                               
+                        add     :zero,h00000200                                                                                               
+                        djnz    clear_cnt,#:zero     
+
+                        mov     t1,par                  &apos;get settings pointers
+                        sub     t1,#3*4
+                        rdlong  input_ptr,t1
+                        mov     angle_ptr,input_ptr
+                        add     angle_ptr,#4*2
+                        mov     depth_ptr,angle_ptr
+                        add     depth_ptr,#4*2
+                        mov     knobs_ptr,depth_ptr
+                        add     knobs_ptr,#4*2
+
+                        add     t1,#1*4                 &apos;get buffer base
+                        rdlong  buff_base,t1
+                        
+                        add     t1,#1*4                 &apos;get buffer size
+                        rdlong  buff_size,t1
+                        shl     buff_size,#2
+
+                        mov     buff_limit,buff_size    &apos;compute buffer limit
+                        sub     buff_limit,#4
+                        
+                        mov     buff_clamp,buff_size    &apos;compute buffer clamp
+                        sub     buff_clamp,#16*4
+                        shl     buff_clamp,#8-2
+
+                        add     t1,#2*4                 &apos;get dira/dirb/ctra/ctrb
+                        mov     t2,#4
+:regs                   rdlong  dira,t1
+                        add     t1,#1*4
+                        add     :regs,h00000200
+                        djnz    t2,#:regs
+
+                        rdlong  cnt_ticks,t1            &apos;get cnt ticks
+
+                        mov     cnt_value,cnt           &apos;prepare for initial waitcnt
+                        add     cnt_value,cnt_ticks
+
+
+&apos; &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+&apos; &boxv;  Spatializer Loop  &boxv;
+&apos; &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+
+&apos; Wait for next sample period, then get knob settings
+
+loop                    waitcnt cnt_value,cnt_ticks     &apos;wait for sample period
+
+                        mov     inputs,#4               &apos;ready to spatialize 4 inputs
+
+                        rdword  t1,knobs_ptr            &apos;get knob settings
+
+                        mov     decay,t1                &apos;get depth decay rate
+                        and     decay,#7
+
+                        shr     t1,#3                   &apos;get parallel echo level
+                        neg     pecho,t1
+                        and     pecho,#7        wz
+        if_z            mov     pecho,#8
+
+                        shr     t1,#3                   &apos;get cross echo level
+                        neg     xecho,t1                
+                        and     xecho,#7        wz                                                
+        if_z            mov     xecho,#8
+
+                        shr     t1,#3                   &apos;get dither level
+                        mov     dither,t1
+                        and     dither,#7
+                        add     dither,#8                          
+
+&apos; Spatialize an input channel - first update dithered outputs
+
+:input                  mov     t1,lfsr0                &apos;update left duty output
+                        sar     t1,dither    
+                        add     t1,left                
+                        mov     frqa,t1                  
+
+                        mov     t1,lfsr1                &apos;update right duty output
+                        sar     t1,dither
+                        add     t1,right                 
+                        mov     frqb,t1
+
+&apos; Get input sample and iterate dither generators
+
+                        rdword  lx,input_ptr    wz      &apos;get input pointer, check if 0
+
+                        test    lfsr0,taps0     wc      &apos;iterate left dither source
+                        rcl     lfsr0,#1
+
+        if_nz           rdlong  lx,lx                   &apos;if pointer not 0, get sample, else use 0
+        
+                        test    lfsr1,taps1     wc      &apos;iterate right dither source
+                        rcl     lfsr1,#1
+
+&apos; Get sample into log form
+
+                        abs     lx,lx           wc      &apos;** sample is signed value
+                        muxc    sign,#1                 &apos;absolutize value and store sign
+
+                        test    lx,hFFFF0000    wz      &apos;msb-justify value and track whole exponent 
+        if_z            shl     lx,#16                  
+                        muxnz   :whole,#$10
+
+                        test    lx,hFF000000    wz
+        if_z            shl     lx,#8
+                        muxnz   :whole,#$08
+
+                        test    lx,hF0000000    wz
+        if_z            shl     lx,#4
+                        muxnz   :whole,#$04
+
+                        test    lx,hC0000000    wz
+        if_z            shl     lx,#2
+                        muxnz   :whole,#$02
+
+                        test    lx,h80000000    wz
+        if_z            shl     lx,#1
+                        muxnz   :whole,#$01
+
+                        shl     lx,#1                   &apos;lookup fractional exponent
+                        movs    lx,#$C
+                        rol     lx,#12
+                        rdword  lx,lx
+                                                                                                                                        
+                        shl     lx,#16                  &apos;insert whole exponent
+:whole                  or      lx,#%00000
+                        ror     lx,#5                   &apos;** sample is now in log form with isolated sign
+
+&apos; Process angle
+
+:angle0                 mov     angle,angles            &apos;get current angle
+                        rdword  t1,angle_ptr            &apos;get target angle
+                        sub     t1,angle        wc      &apos;get target-current difference
+                        abs     t1,t1                   &apos;absolutize difference 
+                        max     t1,#$20                 &apos;limit difference
+                        sumc    angle,t1                &apos;add limited difference to current angle 
+:angle1                 mov     angles,angle            &apos;store current angle
+
+                        shr     angle,#16-12            &apos;make 12-bit angle within quadrants 1|4
+                        sub     angle,h00000800 wc      &apos;subtract &pi;/2, get quadrant 4 into c
+                        negc    angle,angle             &apos;if quadrant 4, negate table offset
+                        or      angle,h00007000         &apos;insert sine table base address &gt;&gt; 1
+                        shl     angle,#1                &apos;shift left to get final word address
+                        rdword  angle,angle             &apos;read sine word from table
+                        negc    angle,angle             &apos;if quadrant 4, negate word (max &pm; $FFFF)
+                        
+&apos; Process depth
+
+:depth0                 mov     depth,depths            &apos;get current depth
+                        rdword  t1,depth_ptr            &apos;get target depth
+                        shl     t1,#15                  &apos;shift up target for scaling space    
+                        sub     t1,depth                &apos;get target-current difference
+                        sar     t1,#19                  &apos;scale difference
+:veloc0                 mov     veloc,velocs            &apos;get velocity                            
+                        add     veloc,t1                &apos;add scaled difference to velocity
+                        add     depth,veloc             &apos;add velocity to current depth
+                        mins    depth,#0                &apos;insure current depth doesn&apos;t go negative
+:depth1                 mov     depths,depth            &apos;store current depth
+                        mov     t1,veloc                &apos;dampen velocity
+                        sar     t1,#8                   
+                        sub     veloc,t1
+:veloc1                 mov     velocs,veloc            &apos;store velocity
+
+                        shr     depth,#19-16            &apos;reduce fractional depth to 16 bits
+                        
+                        mov     t1,depth                &apos;attenuate sample by depth and decay rate
+                        shl     t1,decay                &apos;(logarithmic curve approximates 1/d&sup2;)
+                        sub     lx,t1           wc
+        if_c            mov     lx,#0                   &apos;clamp underflow
+
+                        shr     depth,#16-8             &apos;reduce fractional depth to 8 bits
+                        max     depth,buff_clamp        &apos;confine depth to buffer space
+
+&apos; Compute left and right samples with unique ear attenuations
+                        
+                        mov     rx,lx                   &apos;samples initially identical
+
+                        shl     angle,#10               &apos;shift up ear sine
+
+                        mov     t1,h04000000            &apos;attenuate left sample by left ear sine
+                        add     t1,angle
+                        sub     lx,t1           wc
+        if_c            mov     lx,#0                   &apos;clamp underflow
+
+                        mov     t1,h04000000            &apos;attenuate right sample by right ear sine
+                        sub     t1,angle
+                        sub     rx,t1           wc
+        if_c            mov     rx,#0                   &apos;clamp underflow
+
+&apos; Sum samples into left and right buffer channels at unique ear offsets
+
+                        mov     channels,#2             &apos;ready for left and right channels
+
+                        mov     t1,angle                &apos;multiply ear sine by 7/8 to get &lt;700&micro;s
+                        sar     t1,#3                   &apos;...ear-to-ear delay (&lt;14 samples @20KHz)
+                        sub     angle,t1        
+                        sar     angle,#10+5             &apos;get +/- &lt;7.0 into signed 3.8 format
+
+                        mov     t1,angle                &apos;get left ear sine (lx holds left ear sample)
+
+:channel                add     t1,depth                &apos;get ear sine + depth (with 8 fractional bits)
+
+                        xor     buff_base,#2            &apos;toggle left/right buffer channel
+
+                        mov     t2,t1                   &apos;compute buffer offset for sample summing 
+                        sar     t2,#8                   &apos;get ear sine + depth whole offset
+                        add     t2,#8                   &apos;add center-of-head offset
+                        shl     t2,#2                   &apos;convert to long offset
+                        add     t2,buff_ptr             &apos;add buffer pointer
+                        cmpsub  t2,buff_size            &apos;insure buffer wrap
+                        cmp     t2,buff_limit   wz      &apos;remember if last location
+                        add     t2,buff_base            &apos;add buffer base with left/right channel
+
+                        rol     lx,#5                   &apos;** sample is in log form with isolated sign
+                        movs    :shr,lx                 &apos;get whole log
+                        xor     :shr,#$1F               &apos;not whole log
+                        movs    lx,#$D                  &apos;use fractional log to lookup antilog
+                        rol     lx,#12
+                        rdword  lx,lx
+                        shl     lx,#15                  &apos;msb-justify antilog with leading 1
+                        or      lx,h80000000
+:shr                    shr     lx,#0                   &apos;shift antilog down by not whole log
+                        test    sign,#1         wc      &apos;restore sign
+                        negc    lx,lx                   &apos;** sample is now signed value
+
+                        mov     t3,lx                   &apos;get whole sample
+
+                        sar     lx,#8                   &apos;compute fractional sample for precise      
+                        shl     lx,#8-1                 &apos;...inter-sample summation
+                        and     t1,#$FF                 &apos;(uses 8 fractional bits of ear sine + depth)   
+                        shr     t1,#1           wc
+        if_c            add     t1,lx
+                        sar     t1,#1           wc
+        if_c            add     t1,lx
+                        sar     t1,#1           wc
+        if_c            add     t1,lx                                                              
+                        sar     t1,#1           wc                                                 
+        if_c            add     t1,lx                                                              
+                        sar     t1,#1           wc
+        if_c            add     t1,lx
+                        sar     t1,#1           wc
+        if_c            add     t1,lx
+                        sar     t1,#1           wc
+        if_c            add     t1,lx
+                        sar     t1,#1           wc
+        if_c            add     t1,lx
+
+                        sub     t3,t1                   &apos;get whole-minus-fractional sample            
+
+                        rdword  lx,t2                   &apos;sum whole-minus-fractional sample into +0
+                        shr     t3,#16
+                        add     lx,t3
+                        wrword  lx,t2
+
+        if_nz           add     t2,#4                   &apos;increment buffer offset
+        if_z            mov     t2,buff_base            &apos;insure buffer wrap
+
+                        rdword  lx,t2                   &apos;sum fractional sample into +1
+                        shr     t1,#16
+                        add     lx,t1
+                        wrword  lx,t2
+                        
+                        mov     lx,rx                   &apos;get right ear sample
+                        neg     t1,angle                &apos;get right ear sine
+                        
+                        djnz    channels,#:channel      &apos;loop once for right channel
+
+&apos; Another input channel?
+
+                        add     input_ptr,#2            &apos;increment pointers
+                        add     angle_ptr,#2
+                        add     depth_ptr,#2
+                        add     :angle0,#1
+                        add     :angle1,h00000200
+                        add     :depth0,#1
+                        add     :depth1,h00000200
+                        add     :veloc0,#1
+                        add     :veloc1,h00000200
+
+                        djnz    inputs,#:input          &apos;another input channel?
+
+                        sub     input_ptr,#4*2          &apos;done, reset pointers                                 
+                        sub     depth_ptr,#4*2
+                        sub     angle_ptr,#4*2
+                        sub     :angle0,#4
+                        sub     :angle1,h00000800
+                        sub     :depth0,#4
+                        sub     :depth1,h00000800
+                        sub     :veloc0,#4
+                        sub     :veloc1,h00000800
+
+&apos; Read output samples from buffer and write echoes back
+
+                        mov     t1,buff_ptr             &apos;read sample pair from buffer
+                        add     t1,buff_base
+                        rdlong  left,t1
+
+                        add     buff_ptr,#4             &apos;advance buffer pointer
+                        cmpsub  buff_ptr,buff_size      &apos;insure buffer wrap
+
+                        wrlong  left,par                &apos;update sample pair in main memory
+
+                        mov     right,left              &apos;unpack left and right samples
+                        shl     right,#16
+                        and     left,hFFFF0000
+
+                        mov     lx,left                 &apos;compute parallel echoes
+                        sar     lx,pecho
+                        mov     rx,right
+                        sar     rx,pecho
+
+                        mov     t2,right                &apos;compute cross echoes
+                        sar     t2,xecho
+                        add     lx,t2
+                        mov     t2,left
+                        sar     t2,xecho
+                        add     rx,t2
+
+                        add     left,h80000000          &apos;convert samples to duty cycles
+                        add     right,h80000000                       
+
+                        and     lx,hFFFF0000            &apos;write echoes back to buffer
+                        shr     rx,#16                  
+                        or      lx,rx
+                        wrlong  lx,t1
+
+&apos; Loop for next sample period
+
+                        jmp     #loop
+                                
+
+&apos; &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+&apos; &boxv;  Defined Data  &boxv;
+&apos; &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+
+hFFFF0000               long    $FFFF0000               &apos;miscellaneous constants greater than 9 bits
+hFF000000               long    $FF000000
+hF0000000               long    $F0000000
+hC0000000               long    $C0000000
+h80000000               long    $80000000
+h10000000               long    $10000000
+h04000000               long    $04000000
+h00007000               long    $00007000
+h00000800               long    $00000800
+h00000200               long    $00000200
+
+lfsr0                   long    1                       &apos;linear feedback shift registers for dither noise
+taps0                   long    $A4000080               
+lfsr1                   long    1                       
+taps1                   long    $80A01000               
+
+clear_cnt               long    $1F0 - reserves         &apos;number of reserved registers to clear on startup
+
+
+&apos; &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+&apos; &boxv;  Undefined Data (zeroed by initialization code)  &boxv;
+&apos; &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+
+reserves
+
+cnt_value               res     1                       &apos;reserved registers that get cleared on startup
+cnt_ticks               res     1                        
+
+buff_base               res     1
+buff_size               res     1
+buff_limit              res     1
+buff_clamp              res     1
+buff_ptr                res     1
+
+input_ptr               res     1
+angle_ptr               res     1
+depth_ptr               res     1
+knobs_ptr               res     1
+
+decay                   res     1
+pecho                   res     1
+xecho                   res     1
+dither                  res     1
+                                    
+sign                    res     1
+inputs                  res     1
+channels                res     1
+
+angle                   res     1
+depth                   res     1
+veloc                   res     1
+
+angles                  res     4
+depths                  res     4
+velocs                  res     4
+
+t1                      res     1
+t2                      res     1
+t3                      res     1
+
+lx                      res     1
+rx                      res     1
+
+left                    res     1
+right                   res     1
+
+{{
+
+&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+&boxv;                                                   TERMS OF USE: MIT License                                                  &boxv;                                                            
+&boxvr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvl;
+&boxv;Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation    &boxv; 
+&boxv;files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy,    &boxv;
+&boxv;modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software&boxv;
+&boxv;is furnished to do so, subject to the following conditions:                                                                   &boxv;
+&boxv;                                                                                                                              &boxv;
+&boxv;The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.&boxv;
+&boxv;                                                                                                                              &boxv;
+&boxv;THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE          &boxv;
+&boxv;WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR         &boxv;
+&boxv;COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,   &boxv;
+&boxv;ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                         &boxv;
+&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+}}
+    </code></pre>
+
+    <pre><code>
+{{
+&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;
+File: Parallax Serial Terminal.spin
+Version: 1.0
+Copyright (c) 2009 Parallax, Inc.
+See end of file for terms of use.
+
+Authors: Jeff Martin, Andy Lindsay, Chip Gracey  
+&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;
+}}
+
+{
+HISTORY:
+    This object is made for direct use with the Parallax Serial Terminal; a simple serial communication program
+    available with the Propeller Tool installer and also separately via the Parallax website (www.parallax.com).
+
+    This object is heavily based on FullDuplexSerialPlus (by Andy Lindsay), which is itself heavily based on
+    FullDuplexSerial (by Chip Gracey).
+
+USAGE:
+    &bull; Call Start, or StartRxTx, first.
+    &bull; Be sure to set the Parallax Serial Terminal software to the baudrate specified in Start, and the proper COM port.
+    &bull; At 80 MHz, this object properly receives/transmits at up to 250 Kbaud, or performs transmit-only at up to 1 Mbaud.
+    
+}
+    
+CON
+&apos;&apos;
+&apos;&apos;     Parallax Serial Terminal
+&apos;&apos;    Control Character Constants
+&apos;&apos;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;
+    CS = 16  &apos;&apos;CS: Clear Screen      
+    CE = 11  &apos;&apos;CE: Clear to End of line     
+    CB = 12  &apos;&apos;CB: Clear lines Below 
+
+    HM =  1  &apos;&apos;HM: HoMe cursor       
+    PC =  2  &apos;&apos;PC: Position Cursor in x,y          
+    PX = 14  &apos;&apos;PX: Position cursor in X         
+    PY = 15  &apos;&apos;PY: Position cursor in Y         
+
+    NL = 13  &apos;&apos;NL: New Line        
+    LF = 10  &apos;&apos;LF: Line Feed       
+    ML =  3  &apos;&apos;ML: Move cursor Left          
+    MR =  4  &apos;&apos;MR: Move cursor Right         
+    MU =  5  &apos;&apos;MU: Move cursor Up          
+    MD =  6  &apos;&apos;MD: Move cursor Down
+    TB =  9  &apos;&apos;TB: TaB          
+    BS =  8  &apos;&apos;BS: BackSpace          
+            
+    BP =  7  &apos;&apos;BP: BeeP speaker          
+
+CON
+
+    BUFFER_LENGTH = 64                                   &apos;Recommended as 64 or higher, but can be 2, 4, 8, 16, 32, 64, 128 or 256.
+    BUFFER_MASK   = BUFFER_LENGTH - 1
+    MAXSTR_LENGTH = 49                                   &apos;Maximum length of received numerical string (not including zero terminator).
+
+VAR
+
+    long  cog                                             &apos;Cog flag/id
+
+    long  rx_head                                         &apos;9 contiguous longs (must keep order)
+    long  rx_tail
+    long  tx_head
+    long  tx_tail
+    long  rx_pin
+    long  tx_pin
+    long  rxtx_mode
+    long  bit_ticks
+    long  buffer_ptr
+                        
+    byte  rx_buffer[BUFFER_LENGTH]                        &apos;Receive and transmit buffers
+    byte  tx_buffer[BUFFER_LENGTH]
+
+    byte  str_buffer[MAXSTR_LENGTH+1]                     &apos;String buffer for numerical strings
+
+PUB Start(baudrate) : okay
+{{Start communication with the Parallax Serial Terminal using the Propeller&apos;s programming connection.
+Waits 1 second for connection, then clears screen.
+    Parameters:
+    baudrate - bits per second.  Make sure it matches the Parallax Serial Terminal&apos;s
+                Baud Rate field.
+    Returns    : True (non-zero) if cog started, or False (0) if no cog is available.}}
+
+    okay := StartRxTx(31, 30, 0, baudrate)
+    waitcnt(clkfreq + cnt)                                &apos;Wait 1 second for PST
+    Clear                                                 &apos;Clear display
+
+PUB StartRxTx(rxpin, txpin, mode, baudrate) : okay
+{{Start serial communication with designated pins, mode, and baud.
+    Parameters:
+    rxpin    - input pin; receives signals from external device&apos;s TX pin.
+    txpin    - output pin; sends signals to  external device&apos;s RX pin.
+    mode     - signaling mode (4-bit pattern).
+                bit 0 - inverts rx.
+                bit 1 - inverts tx.
+                bit 2 - open drain/source tx.
+                bit 3 - ignore tx echo on rx.
+    baudrate - bits per second.
+    Returns    : True (non-zero) if cog started, or False (0) if no cog is available.}}
+
+    stop
+    longfill(@rx_head, 0, 4)
+    longmove(@rx_pin, @rxpin, 3)
+    bit_ticks := clkfreq / baudrate
+    buffer_ptr := @rx_buffer
+    okay := cog := cognew(@entry, @rx_head) + 1
+
+PUB Stop
+{{Stop serial communication; frees a cog.}}
+
+    if cog
+    cogstop(cog~ - 1)
+    longfill(@rx_head, 0, 9)
+
+PUB Char(bytechr)
+{{Send single-byte character.  Waits for room in transmit buffer if necessary.
+    Parameter:
+    bytechr - character (ASCII byte value) to send.}}
+
+    repeat until (tx_tail &lt;&gt; ((tx_head + 1) &amp; BUFFER_MASK))
+    tx_buffer[tx_head] := bytechr
+    tx_head := (tx_head + 1) &amp; BUFFER_MASK
+
+    if rxtx_mode &amp; %1000
+    CharIn
+
+PUB Chars(bytechr, count)
+{{Send multiple copies of a single-byte character. Waits for room in transmit buffer if necessary.
+    Parameters:
+    bytechr - character (ASCII byte value) to send.
+    count   - number of bytechrs to send.}}
+
+    repeat count
+    Char(bytechr)
+
+PUB CharIn : bytechr
+{{Receive single-byte character.  Waits until character received.
+    Returns: $00..$FF}}
+
+    repeat while (bytechr := RxCheck) &lt; 0
+
+PUB Str(stringptr)
+{{Send zero terminated string.
+    Parameter:
+    stringptr - pointer to zero terminated string to send.}}
+
+    repeat strsize(stringptr)
+    Char(byte[stringptr++])
+
+PUB StrIn(stringptr)
+{{Receive a string (carriage return terminated) and stores it (zero terminated) starting at stringptr.
+Waits until full string received.
+    Parameter:
+    stringptr - pointer to memory in which to store received string characters.
+                Memory reserved must be large enough for all string characters plus a zero terminator.}}
+    
+    StrInMax(stringptr, -1)
+
+PUB StrInMax(stringptr, maxcount)
+{{Receive a string of characters (either carriage return terminated or maxcount in length) and stores it (zero terminated)
+starting at stringptr.  Waits until either full string received or maxcount characters received.
+    Parameters:
+    stringptr - pointer to memory in which to store received string characters.
+                Memory reserved must be large enough for all string characters plus a zero terminator (maxcount + 1).
+    maxcount  - maximum length of string to receive, or -1 for unlimited.}}
+    
+    repeat while (maxcount--)                                                     &apos;While maxcount not reached
+    if (byte[stringptr++] := CharIn) == NL                                      &apos;Get chars until NL
+        quit
+    byte[stringptr+(byte[stringptr-1] == NL)]~                                    &apos;Zero terminate string; overwrite NL or append 0 char
+
+PUB Dec(value) | i, x
+{{Send value as decimal characters.
+    Parameter:
+    value - byte, word, or long value to send as decimal characters.}}
+
+    x := value == NEGX                                                            &apos;Check for max negative
+    if value &lt; 0
+    value := ||(value+x)                                                        &apos;If negative, make positive; adjust for max negative
+    Char(&quot;-&quot;)                                                                   &apos;and output sign
+
+    i := 1_000_000_000                                                            &apos;Initialize divisor
+
+    repeat 10                                                                     &apos;Loop for 10 digits
+    if value =&gt; i                                                               
+        Char(value / i + &quot;0&quot; + x*(i == 1))                                        &apos;If non-zero digit, output digit; adjust for max negative
+        value //= i                                                               &apos;and digit from value
+        result~~                                                                  &apos;flag non-zero found
+    elseif result or i == 1
+        Char(&quot;0&quot;)                                                                 &apos;If zero digit (or only digit) output it
+    i /= 10                                                                     &apos;Update divisor
+
+PUB DecIn : value
+{{Receive carriage return terminated string of characters representing a decimal value.
+    Returns: the corresponding decimal value.}}
+
+    StrInMax(@str_buffer, MAXSTR_LENGTH)
+    value := StrToBase(@str_buffer, 10)
+
+PUB Bin(value, digits)
+{{Send value as binary characters up to digits in length.
+    Parameters:
+    value  - byte, word, or long value to send as binary characters.
+    digits - number of binary digits to send.  Will be zero padded if necessary.}}
+
+    value &lt;&lt;= 32 - digits
+    repeat digits
+    Char((value &lt;-= 1) &amp; 1 + &quot;0&quot;)
+
+PUB BinIn : value
+{{Receive carriage return terminated string of characters representing a binary value.
+    Returns: the corresponding binary value.}}
+    
+    StrInMax(@str_buffer, MAXSTR_LENGTH)
+    value := StrToBase(@str_buffer, 2)
+    
+PUB Hex(value, digits)
+{{Send value as hexadecimal characters up to digits in length.
+    Parameters:
+    value  - byte, word, or long value to send as hexadecimal characters.
+    digits - number of hexadecimal digits to send.  Will be zero padded if necessary.}}
+
+    value &lt;&lt;= (8 - digits) &lt;&lt; 2
+    repeat digits
+    Char(lookupz((value &lt;-= 4) &amp; $F : &quot;0&quot;..&quot;9&quot;, &quot;A&quot;..&quot;F&quot;))
+
+PUB HexIn : value
+{{Receive carriage return terminated string of characters representing a hexadecimal value.
+    Returns: the corresponding hexadecimal value.}}
+
+    StrInMax(@str_buffer, MAXSTR_LENGTH)
+    value := StrToBase(@str_buffer, 16)
+
+PUB Clear
+{{Clear screen and place cursor at top-left.}}
+    
+    Char(CS)
+
+PUB ClearEnd
+{{Clear line from cursor to end of line.}}
+    
+    Char(CE)
+    
+PUB ClearBelow
+{{Clear all lines below cursor.}}
+    
+    Char(CB)
+    
+PUB Home
+{{Send cursor to home position (top-left).}}
+    
+    Char(HM)
+    
+PUB Position(x, y)
+{{Position cursor at column x, row y (from top-left).}}
+    
+    Char(PC)
+    Char(x)
+    Char(y)
+    
+PUB PositionX(x)
+{{Position cursor at column x of current row.}}
+    Char(PX)
+    Char(x)
+    
+PUB PositionY(y)
+{{Position cursor at row y of current column.}}
+    Char(PY)
+    Char(y)
+
+PUB NewLine
+{{Send cursor to new line (carriage return plus line feed).}}
+    
+    Char(NL)
+    
+PUB LineFeed
+{{Send cursor down to next line.}}
+    
+    Char(LF)
+    
+PUB MoveLeft(x)
+{{Move cursor left x characters.}}
+    
+    repeat x
+    Char(ML)
+    
+PUB MoveRight(x)
+{{Move cursor right x characters.}}
+    
+    repeat x
+    Char(MR)
+    
+PUB MoveUp(y)
+{{Move cursor up y lines.}}
+    
+    repeat y
+    Char(MU)
+    
+PUB MoveDown(y)
+{{Move cursor down y lines.}}
+    
+    repeat y
+    Char(MD)
+    
+PUB Tab
+{{Send cursor to next tab position.}}
+    
+    Char(TB)
+    
+PUB Backspace
+{{Delete one character to left of cursor and move cursor there.}}
+    
+    Char(BS)
+    
+PUB Beep
+{{Play bell tone on PC speaker.}}
+    
+    Char(BP)
+    
+PUB RxCount : count
+{{Get count of characters in receive buffer.
+    Returns: number of characters waiting in receive buffer.}}
+
+    count := rx_head - rx_tail
+    count -= BUFFER_LENGTH*(count &lt; 0)
+
+PUB RxFlush
+{{Flush receive buffer.}}
+
+    repeat while rxcheck =&gt; 0
+    
+PRI RxCheck : bytechr
+{Check if character received; return immediately.
+    Returns: -1 if no byte received, $00..$FF if character received.}
+
+    bytechr~~
+    if rx_tail &lt;&gt; rx_head
+    bytechr := rx_buffer[rx_tail]
+    rx_tail := (rx_tail + 1) &amp; BUFFER_MASK
+
+PRI StrToBase(stringptr, base) : value | chr, index
+{Converts a zero terminated string representation of a number to a value in the designated base.
+Ignores all non-digit characters (except negative (-) when base is decimal (10)).}
+
+    value := index := 0
+    repeat until ((chr := byte[stringptr][index++]) == 0)
+    chr := -15 + --chr &amp; %11011111 + 39*(chr &gt; 56)                              &apos;Make &quot;0&quot;-&quot;9&quot;,&quot;A&quot;-&quot;F&quot;,&quot;a&quot;-&quot;f&quot; be 0 - 15, others out of range     
+    if (chr &gt; -1) and (chr &lt; base)                                              &apos;Accumulate valid values into result; ignore others
+        value := value * base + chr                                                  
+    if (base == 10) and (byte[stringptr] == &quot;-&quot;)                                  &apos;If decimal, address negative sign; ignore otherwise
+    value := - value
+        
+DAT
+
+&apos;***********************************
+&apos;* Assembly language serial driver *
+&apos;***********************************
+
+                        org
+&apos;
+&apos;
+&apos; Entry
+&apos;
+entry                   mov     t1,par                &apos;get structure address
+                        add     t1,#4 &lt;&lt; 2            &apos;skip past heads and tails
+
+                        rdlong  t2,t1                 &apos;get rx_pin
+                        mov     rxmask,#1
+                        shl     rxmask,t2
+
+                        add     t1,#4                 &apos;get tx_pin
+                        rdlong  t2,t1
+                        mov     txmask,#1
+                        shl     txmask,t2
+
+                        add     t1,#4                 &apos;get rxtx_mode
+                        rdlong  rxtxmode,t1
+
+                        add     t1,#4                 &apos;get bit_ticks
+                        rdlong  bitticks,t1
+
+                        add     t1,#4                 &apos;get buffer_ptr
+                        rdlong  rxbuff,t1
+                        mov     txbuff,rxbuff
+                        add     txbuff,#BUFFER_LENGTH
+
+                        test    rxtxmode,#%100  wz    &apos;init tx pin according to mode
+                        test    rxtxmode,#%010  wc
+        if_z_ne_c       or      outa,txmask
+        if_z            or      dira,txmask
+
+                        mov     txcode,#transmit      &apos;initialize ping-pong multitasking
+&apos;
+&apos;
+&apos; Receive
+&apos;
+receive                 jmpret  rxcode,txcode         &apos;run chunk of tx code, then return
+
+                        test    rxtxmode,#%001  wz    &apos;wait for start bit on rx pin
+                        test    rxmask,ina      wc
+        if_z_eq_c       jmp     #receive
+
+                        mov     rxbits,#9             &apos;ready to receive byte
+                        mov     rxcnt,bitticks
+                        shr     rxcnt,#1
+                        add     rxcnt,cnt                          
+
+:bit                    add     rxcnt,bitticks        &apos;ready next bit period
+
+:wait                   jmpret  rxcode,txcode         &apos;run chunk of tx code, then return
+
+                        mov     t1,rxcnt              &apos;check if bit receive period done
+                        sub     t1,cnt
+                        cmps    t1,#0           wc
+        if_nc           jmp     #:wait
+
+                        test    rxmask,ina      wc    &apos;receive bit on rx pin
+                        rcr     rxdata,#1
+                        djnz    rxbits,#:bit
+
+                        shr     rxdata,#32-9          &apos;justify and trim received byte
+                        and     rxdata,#$FF
+                        test    rxtxmode,#%001  wz    &apos;if rx inverted, invert byte
+        if_nz           xor     rxdata,#$FF
+
+                        rdlong  t2,par                &apos;save received byte and inc head
+                        add     t2,rxbuff
+                        wrbyte  rxdata,t2
+                        sub     t2,rxbuff
+                        add     t2,#1
+                        and     t2,#BUFFER_MASK
+                        wrlong  t2,par
+
+                        jmp     #receive              &apos;byte done, receive next byte
+&apos;
+&apos;
+&apos; Transmit
+&apos;
+transmit                jmpret  txcode,rxcode         &apos;run chunk of rx code, then return
+
+                        mov     t1,par                &apos;check for head &lt;&gt; tail
+                        add     t1,#2 &lt;&lt; 2
+                        rdlong  t2,t1
+                        add     t1,#1 &lt;&lt; 2
+                        rdlong  t3,t1
+                        cmp     t2,t3           wz
+        if_z            jmp     #transmit
+
+                        add     t3,txbuff             &apos;get byte and inc tail
+                        rdbyte  txdata,t3
+                        sub     t3,txbuff
+                        add     t3,#1
+                        and     t3,#BUFFER_MASK
+                        wrlong  t3,t1
+
+                        or      txdata,#$100          &apos;ready byte to transmit
+                        shl     txdata,#2
+                        or      txdata,#1
+                        mov     txbits,#11
+                        mov     txcnt,cnt
+
+:bit                    test    rxtxmode,#%100  wz    &apos;output bit on tx pin 
+                        test    rxtxmode,#%010  wc    &apos;according to mode
+        if_z_and_c      xor     txdata,#1
+                        shr     txdata,#1       wc
+        if_z            muxc    outa,txmask        
+        if_nz           muxnc   dira,txmask
+                        add     txcnt,bitticks        &apos;ready next cnt
+
+:wait                   jmpret  txcode,rxcode         &apos;run chunk of rx code, then return
+
+                        mov     t1,txcnt              &apos;check if bit transmit period done
+                        sub     t1,cnt
+                        cmps    t1,#0           wc
+        if_nc           jmp     #:wait
+
+                        djnz    txbits,#:bit          &apos;another bit to transmit?
+
+                        jmp     #transmit             &apos;byte done, transmit next byte
+&apos;
+&apos;
+&apos; Uninitialized data
+&apos;
+t1                      res     1
+t2                      res     1
+t3                      res     1
+
+rxtxmode                res     1
+bitticks                res     1
+
+rxmask                  res     1
+rxbuff                  res     1
+rxdata                  res     1
+rxbits                  res     1
+rxcnt                   res     1
+rxcode                  res     1
+
+txmask                  res     1
+txbuff                  res     1
+txdata                  res     1
+txbits                  res     1
+txcnt                   res     1
+txcode                  res     1
+
+{{
+
+&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+&boxv;                           TERMS OF USE: MIT License                                  &boxv;                                                            
+&boxvr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvl;
+&boxv;Permission is hereby granted, free of charge, to any person obtaining a copy of this  &boxv;
+&boxv;software and associated documentation files (the &quot;Software&quot;), to deal in the Software &boxv; 
+&boxv;without restriction, including without limitation the rights to use, copy, modify,    &boxv;
+&boxv;merge, publish, distribute, sublicense, and/or sell copies of the Software, and to    &boxv;
+&boxv;permit persons to whom the Software is furnished to do so, subject to the following   &boxv;
+&boxv;conditions:                                                                           &boxv;                                            &boxv;
+&boxv;                                                                                      &boxv;                                               &boxv;
+&boxv;The above copyright notice and this permission notice shall be included in all copies &boxv;
+&boxv;or substantial portions of the Software.                                              &boxv;
+&boxv;                                                                                      &boxv;                                                &boxv;
+&boxv;THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,   &boxv;
+&boxv;INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A         &boxv;
+&boxv;PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT    &boxv;
+&boxv;HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION     &boxv;
+&boxv;OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE        &boxv;
+&boxv;SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                                &boxv;
+&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+}}
+    </code></pre>
+    <pre><code>
+{{
+'******************************
+'*  VGA tiled image driver
+'*  Copyright 2020 Total Spectrum Software Inc.
+'*  MIT Licensed
+'******************************
+
+Runs in its own COG. See Notes.md for theory of operation.
+
+Four variants are provided:
+
+8 bytes/char: uses full 24 bit color with all effects available         (requires
+4 bytes/char: uses 8bpp for foreground and background, all effects available
+2 bytes/char: uses 16 colors (4bpp) with blinking effect                (requires sysclock >= 4*pixel clock)
+1 byte/char:  only allows 128 characters, 1 bit for blinking, no colors (requires sysclock >= 2*pixel clock)
+
+Methods:
+
+start(params)
+  Starts the driver. "params" is a pointer to a block of 32 bit parameters longs:
+  params[0]: base pin to use for the VGA
+  params[1]: pointer to screen buffer
+  params[2]: number of columns
+  params[3]: number of rows
+  params[4]: pointer to font data
+  params[5]: font width (for now, must be 8 or 16)
+  params[6]: font height
+  params[7]: pixel clock scaling value ($8000_0000 * pixel_clock / system_clock)
+  params[8]: horizontal front porch
+  params[9]: hsync pulse length
+  params[10]: vertical front porch
+  params[11]: vsync lines
+  params[12]: vertical back porch
+  params[13]: polarity: %00 both positive, %10 vertical negative, %01 horizontal negative, %11 both negative
+  params[14]: cell size, i.e. bytes per character (1, 2, 4, or 8)
+  
+  returns 1 + the number of the COG used, or 0 on failure
+}}
+
+CON
+  intensity = 80    '0..128
+
+  FIELD_HANDLER = $300  ' location of pixel subroutine in LUT memory
+  FIELD_HANDLER_END = $3a0
+  LINE_HANDLER = $3a0
+  LINE_HANDLER_END = $3ff
+  
+DAT     
+        org 0
+	'' on entry to the COG, ptra contains the parameter block, and
+	'' ptrb points to the HUB address of the code (@entry)
+entry
+	' read parameters
+basepin_val
+	rdlong	basepin_val, ptra++
+buffer_base
+        rdlong  buffer_base, ptra++
+text_cols
+	rdlong  text_cols, ptra++
+text_rows
+	rdlong  text_rows, ptra++
+font_base
+        rdlong	font_base, ptra++
+font_width
+        rdlong  font_width, ptra++
+font_height
+	rdlong  font_height, ptra++
+fpix_scale
+        rdlong  fpix_scale, ptra++
+hfront_porch
+	rdlong  hfront_porch, ptra++
+hsync_pulse
+        rdlong  hsync_pulse, ptra++
+hback_porch
+	rdlong  hback_porch, ptra++
+vfront_porch
+	rdlong  vfront_porch, ptra++
+vsync_pulse
+	rdlong  vsync_pulse, ptra++
+vback_porch
+	rdlong  vback_porch, ptra++
+polarity
+        rdlong  polarity, ptra++
+	' this must be either 8 (for 32 bit color) or 4 (for 8 bit color)
+bytes_per_char
+	rdlong	bytes_per_char, ptra++
+'
+' Setup 
+'
+' this code can be overwritten once we are going
+'
+
+vga_start
+        ' calculate things based on parameters
+char_cnt
+	mov	char_cnt, text_cols
+strikethru_line
+	shr	char_cnt, #1		' we process 2 characters at a time
+vsync_val
+	mov	strikethru_line, font_height
+stride
+	shr	strikethru_line, #1	' divide height by 2
+stride_chunks
+        mov	stride, text_cols
+hpixels
+        mul     stride, bytes_per_char
+vpixels
+        mov     stride_chunks, stride
+buffer_ptr
+        add     stride_chunks, #63
+font_ptr
+        shr     stride_chunks, #6 ' divide by 64
+mycogid
+        mov     hpixels, text_cols
+font_line_counter
+        mul     hpixels, font_width
+x
+        mov     vpixels, text_rows
+y
+        mul     vpixels, font_height
+
+font_line_cnt
+	' check font width; handle 8 (default) or 16
+	cmp	font_width, #16 wz
+if_z	shl	font_line_bytes, #1
+	mov	font_line_cnt, font_line_bytes
+	shr	font_line_cnt, #2	' convert to longs
+	sub	font_line_cnt, #1
+	
+	' copy parameters into settings
+curchar
+	add	m_rf_even, font_width
+cureff
+	add	m_rf_odd, font_width
+bgcolor
+	add	m_bs, hfront_porch
+fgcolor
+	add	m_sn, hsync_pulse
+	add	m_bv, hback_porch
+	add	m_vi, hpixels
+
+	' put our COG id into the DAC info
+	cogid	mycogid
+	shl	mycogid, #8
+	or 	dacmode_s, mycogid
+	or	dacmode_c, mycogid
+
+        setxfrq fpix_scale       'set transfer frequency
+	mov	vsync_val, basepin_val
+	add	vsync_val, #4
+	
+        ' set up initial polarity
+        test    polarity, #%10 wc
+        drvc    vsync_val
+        test    polarity, #1 wc
+	' NOTE: the setcmod instruction puts its argument in the D field (bits 9-17)
+	' so to set the low bit of the argument, we need to set bit 9 of the instruction
+        bitc    cmodval, #9		' set bit for cmodval
+	
+        'set up level scaling
+        setcy   ##intensity << 24   'r  set colorspace for rgb
+        setci   ##intensity << 16   'g
+        setcq   ##intensity << 08   'b
+cmodval
+	setcmod #%01_0_000_0             'enable colorspace conversion; note low bit is set above
+
+        'RJA dacmodes changed for real P2
+        wrpin   dacmode_s,basepin_val      'enable dac modes in pins 0..3
+	dirh	basepin_val
+	add	basepin_val, #1
+        wrpin   dacmode_c,basepin_val
+	dirh	basepin_val
+	add	basepin_val, #1
+        wrpin   dacmode_c,basepin_val
+	dirh	basepin_val
+	add	basepin_val, #1
+        wrpin   dacmode_c,basepin_val
+	dirh	basepin_val
+
+	' save original ptrb
+	mov	pb, ptrb
+	
+	' load different routines into upper LUT depending on the bytes per char
+	' 8, 4, 2, or 1
+	' ptrb still points at @entry; make it point to the code we want to load
+	'
+	encod	bytes_per_char, bytes_per_char		' convert 1, 2, 4, 8 to 0, 1, 2, 3
+	cmp	font_width, #16 wz
+  if_z	or	bytes_per_char, #4			' offset later in table
+	alts	bytes_per_char, #line_offset_table	' look up in line_offset_table
+	add	pb, 0-0				' the offset we want for the code to load
+
+	' now load the line code into LUT
+	setq2	#(LINE_HANDLER_END-LINE_HANDLER)-1
+	rdlong	(LINE_HANDLER & $1ff), pb
+
+	' and load the field code into LUT
+	add	ptrb, ##(@field_entry - @entry)
+	setq2   #(FIELD_HANDLER_END-FIELD_HANDLER)-1
+	rdlong	(FIELD_HANDLER&$1ff),ptrb
+
+	jmp	#\FIELD_HANDLER
+'
+'
+' Initialized data
+'RJA:  New dacmodes for real P2
+dacmode_s       long    %0000_0000_000_1011000000000_01_00000_0         'hsync is 123-ohm, 3.3V
+dacmode_c       long    %0000_0000_000_1011100000000_01_00000_0         'R/G/B are 75-ohm, 2.0V
+
+m_bs        long    $7F010000 {+HFRONT_PORCH}        'before sync
+m_sn        long    $7F010000 {+HSYNC}        'sync
+m_bv        long    $7F010000 {+HBACK_PORCH}        'before visible
+m_vi        long    $7F010000 {+HPIXELS}       'visible
+
+m_rf_even    long   $0F000000 {+FONT_WIDTH}     ' 1bpp
+m_rf_odd     long   $0F010000 {+FONT_WIDTH}     ' 1bpp LUT immediate
+
+' active character effects for this line
+' these bits have the following meanings:
+'    01 = hide (show all fgground color)
+'    02 = underline
+'    04 = strikethrough
+'    08 = reserved
+'    10 = blinking hide
+'    20 = blinking underline
+'    40 = blinking strikethrough
+'    80 = if hidden, use bgcolor instead of fgcolor
+
+line_effects	long 0
+
+' active effects for this field; the blinking ones will be turned off
+' on half of the fields
+field_effects   long 0
+
+' count of elapsed fields, used for blinking
+field_count	long	0
+
+' number of bytes in a font line (256 for 8 bit wide font)
+font_line_bytes  long 256
+
+	     ' standard ANSI 256 color palette
+color_palette
+	long	$00000000, $80000000, $00800000, $80800000, $00008000, $80008000, $00808000, $c0c0c000
+	long	$80808000, $ff000000, $00ff0000, $ffff0000, $0000ff00, $ff00ff00, $00ffff00, $ffffff00
+	long	$00000000, $00003300, $00006600, $00009900, $0000cc00, $0000ff00, $00330000, $00333300
+	long	$00336600, $00339900, $0033cc00, $0033ff00, $00660000, $00663300, $00666600, $00669900
+	long	$0066cc00, $0066ff00, $00990000, $00993300, $00996600, $00999900, $0099cc00, $0099ff00
+	long	$00cc0000, $00cc3300, $00cc6600, $00cc9900, $00cccc00, $00ccff00, $00ff0000, $00ff3300
+	long	$00ff6600, $00ff9900, $00ffcc00, $00ffff00, $33000000, $33003300, $33006600, $33009900
+	long	$3300cc00, $3300ff00, $33330000, $33333300, $33336600, $33339900, $3333cc00, $3333ff00
+	long	$33660000, $33663300, $33666600, $33669900, $3366cc00, $3366ff00, $33990000, $33993300
+	long	$33996600, $33999900, $3399cc00, $3399ff00, $33cc0000, $33cc3300, $33cc6600, $33cc9900
+	long	$33cccc00, $33ccff00, $33ff0000, $33ff3300, $33ff6600, $33ff9900, $33ffcc00, $33ffff00
+	long	$66000000, $66003300, $66006600, $66009900, $6600cc00, $6600ff00, $66330000, $66333300
+	long	$66336600, $66339900, $6633cc00, $6633ff00, $66660000, $66663300, $66666600, $66669900
+	long	$6666cc00, $6666ff00, $66990000, $66993300, $66996600, $66999900, $6699cc00, $6699ff00
+	long	$66cc0000, $66cc3300, $66cc6600, $66cc9900, $66cccc00, $66ccff00, $66ff0000, $66ff3300
+	long	$66ff6600, $66ff9900, $66ffcc00, $66ffff00, $99000000, $99003300, $99006600, $99009900
+	long	$9900cc00, $9900ff00, $99330000, $99333300, $99336600, $99339900, $9933cc00, $9933ff00
+	long	$99660000, $99663300, $99666600, $99669900, $9966cc00, $9966ff00, $99990000, $99993300
+	long	$99996600, $99999900, $9999cc00, $9999ff00, $99cc0000, $99cc3300, $99cc6600, $99cc9900
+	long	$99cccc00, $99ccff00, $99ff0000, $99ff3300, $99ff6600, $99ff9900, $99ffcc00, $99ffff00
+	long	$cc000000, $cc003300, $cc006600, $cc009900, $cc00cc00, $cc00ff00, $cc330000, $cc333300
+	long	$cc336600, $cc339900, $cc33cc00, $cc33ff00, $cc660000, $cc663300, $cc666600, $cc669900
+	long	$cc66cc00, $cc66ff00, $cc990000, $cc993300, $cc996600, $cc999900, $cc99cc00, $cc99ff00
+	long	$cccc0000, $cccc3300, $cccc6600, $cccc9900, $cccccc00, $ccccff00, $ccff0000, $ccff3300
+	long	$ccff6600, $ccff9900, $ccffcc00, $ccffff00, $ff000000, $ff003300, $ff006600, $ff009900
+	long	$ff00cc00, $ff00ff00, $ff330000, $ff333300, $ff336600, $ff339900, $ff33cc00, $ff33ff00
+	long	$ff660000, $ff663300, $ff666600, $ff669900, $ff66cc00, $ff66ff00, $ff990000, $ff993300
+	long	$ff996600, $ff999900, $ff99cc00, $ff99ff00, $ffcc0000, $ffcc3300, $ffcc6600, $ffcc9900
+	long	$ffcccc00, $ffccff00, $ffff0000, $ffff3300, $ffff6600, $ffff9900, $ffffcc00, $ffffff00
+	long	$08080800, $12121200, $1c1c1c00, $26262600, $30303000, $3a3a3a00, $44444400, $4e4e4e00
+	long	$58585800, $62626200, $6c6c6c00, $76767600, $80808000, $8a8a8a00, $94949400, $9e9e9e00
+	long	$a8a8a800, $b2b2b200, $bcbcbc00, $c6c6c600, $d0d0d000, $dadada00, $e4e4e400, $eeeeee00
+
+
+' space for 256 bytes of font data (256 characters * 2 byte/char)
+font_line byte 0[512]
+
+' table of offsets to the character handling subroutines
+line_offset_table
+	long	@char1_loop - @entry
+	long	@char2_loop - @entry
+	long	@char4_loop - @entry
+	long	@char8_loop - @entry
+	
+	long	@word1_loop - @entry
+	long	@word2_loop - @entry
+	long	@word4_loop - @entry
+	long	@word8_loop - @entry
+
+mask_ffff
+	long	$ffff
+	
+	fit	$1f0
+
+	org	FIELD_HANDLER
+'
+'
+' Field loop
+'
+field_entry
+	mov     y,vfront_porch           'top blanks
+        call    #blank
+	mov	buffer_ptr, buffer_base
+	mov	font_ptr, font_base
+	mov	font_line_counter, font_height
+	add	field_count, #1
+	test	field_count, #32 wz
+  if_z	mov	field_effects, #$ff
+  if_nz mov	field_effects, #$0f
+  
+        mov     y,vpixels          'set visible line
+line    
+        call    #hsync          'do horizontal sync; also loads up next font line
+
+	' now read the character data
+	' this is stored as 8 byte per character;
+	' two longs, first containing 24 bit color + character glyph,
+        ' second containing the 24 bit color and a reserved field
+	rdfast stride_chunks, buffer_ptr
+
+	sub	font_line_counter, #1 wz
+if_z	mov	font_line_counter, font_height
+if_z	mov	font_ptr, font_base
+if_z	add	buffer_ptr, stride ' next line
+
+	'' check for effects on this line
+	mov	line_effects, #$91
+	cmp	font_line_counter, #1 wz
+if_z	or	line_effects, #$22
+	cmp	font_line_counter, strikethru_line wz
+if_z    or	line_effects, #$44
+
+	'' turn off blink specific stuff
+	and	line_effects, field_effects
+
+	''
+	'' the main loop processes 2 characters (16 pixels) at a time,
+	'' ping-ponging between even and odd
+	''
+	' we use LUT elements 0,1 and 32,33 to hold the colors, ping-ponging back
+	' between them
+	' we have to use 32,33 because the granularity of changing the streamer
+	' LUT pointer is 5 bits
+	call	#\LINE_HANDLER 	 ' call the pixel loop
+	djnz	y, #line
+
+end_of_line
+        mov	y,vback_porch           'bottom blanks
+        call    #blank
+
+        drvnot  vsync_val          'sync on
+
+        mov 	y,vsync_pulse      'sync blanks
+        call    #blank
+
+        drvnot  vsync_val          'sync off
+
+        jmp     #field_entry       'loop
+
+	
+'
+'
+' Subroutines
+'
+blank       call    #hsync          'blank lines
+            xcont   m_vi,#0
+    _ret_   djnz    y,#blank
+
+hsync       xcont   m_bs,#0         'horizontal sync
+            xcont   m_sn,#1
+	xcont m_bv, #0
+	'setq	#63		' read 64 longs = 256 bytes from font table
+	setq	font_line_cnt	' read data from font table
+	rdlong	font_line, font_ptr
+  _ret_	add	font_ptr, font_line_bytes
+
+
+  	fit	FIELD_HANDLER_END
+	
+''''''''''''''''''''''''''''''''''''''''''''''''''
+'' LUT subroutines for 8 pixel wide fonts
+'' all of these should process a whole line of
+'' output
+''
+'' timing: generally speaking we process an even
+'' and odd character (16 pixels) at a time
+'' assuming a 250 MHz system clock this gives us
+'' the following requirements:
+
+'' 640x480 25 MHz pixel clock: 10 cycles/pixel
+''              so 5*16 == 80 instructions
+'' 800x600 40 MHz pixel clock:  6 cycles/pixel
+''              so 3*16 == 48 instructions
+'' 1024x768 65 MHz pixel clock: 3.75 cycles/pixel
+''              or roughly 30 instructions
+''              
+'' for a 160 MHz system clock:
+'' 640x480:  50 instructions
+'' 800x600:  32 instructions
+'' 1024x768: 19 instructions
+''''''''''''''''''''''''''''''''''''''''''''''''''
+
+	'' 8 bytes/character
+	'' 24 instructions: so sysclock >= 3 * pixel clock
+	
+	org	LINE_HANDLER
+char8_loop
+	rep	@end_32bppchar, char_cnt
+next_32bppchar
+
+	'' even pixel
+	rflong	fgcolor
+	rflong	bgcolor
+	getbyte curchar, fgcolor, #0
+	test	bgcolor, line_effects wz
+	
+	andn	fgcolor, #$FF
+	andn	bgcolor, #$FF
+	altgb	curchar, #font_line	' fetch from font table
+	getbyte	curchar
+
+  if_nz or	curchar, #$ff		' if effect mask active add a line
+	xcont	m_rf_even, curchar
+	wrlut	bgcolor, #0
+	wrlut	fgcolor, #1
+
+	'' odd pixel
+	rflong	fgcolor
+	rflong	bgcolor
+	getbyte curchar, fgcolor, #0
+	test	bgcolor, line_effects wz
+	
+	andn	fgcolor, #$FF
+	andn	bgcolor, #$FF ' handle in the glyphat code
+	altgb	curchar, #font_line	' fetch from font table
+	getbyte	curchar
+	
+  if_nz or	curchar, #$ff		' if effect mask active add a line
+	xcont	m_rf_odd, curchar
+	wrlut	bgcolor, #32
+	wrlut	fgcolor, #33
+	
+	'' 
+	'' end of loop
+end_32bppchar
+	ret
+
+	fit	LINE_HANDLER_END
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+	'' 4 bytes/char
+	'' 30 instructions
+	
+	org	LINE_HANDLER
+char4_loop
+	rep	@end_8bppchar, char_cnt
+next_8bppchar
+	'' even character
+	rfbyte	fgcolor
+	rfbyte	bgcolor
+	rfbyte	curchar
+	rfbyte	cureff wc
+
+	' do table lookup on colors
+	alts	fgcolor, #color_Palette
+	mov	fgcolor, 0-0
+	alts	bgcolor, #color_Palette
+	mov	bgcolor, 0-0
+	
+	altgb	curchar, #font_line	' fetch from font table
+	getbyte	curchar
+	and	cureff, line_effects wz	
+
+	
+  if_nz	muxnc	curchar, #$ff		' if effect mask active add a line
+	xcont	m_rf_even, curchar
+	wrlut	bgcolor, #0
+	wrlut	fgcolor, #1
+
+	'' odd character
+	rfbyte	fgcolor
+	rfbyte	bgcolor
+	rfbyte	curchar
+	rfbyte	cureff wc
+
+	' do table lookup on colors
+	alts	fgcolor, #color_Palette
+	mov	fgcolor, 0-0
+	alts	bgcolor, #color_Palette
+	mov	bgcolor, 0-0
+	
+	altgb	curchar, #font_line	' fetch from font table
+	getbyte	curchar
+	and	cureff, line_effects wz	
+'	test	cureff, #$80 wc
+	
+  if_nz muxnc	curchar, #$ff		' if effect mask active add a line
+	xcont	m_rf_odd, curchar
+	wrlut	bgcolor, #32
+	wrlut	fgcolor, #33
+	
+	'' 
+	'' end of loop
+end_8bppchar
+	ret
+	fit	LINE_HANDLER_END
+
+	''''''''''''''''''''''''''''''''''''''''''''''''''
+	' 2 bytes/char
+	' this consists of an 8 bit character followed by
+	' 8 bit effects; 1 bit blink, 3 bits bg color, 4 bits fg color
+	'
+	' 30 instructions
+	org	LINE_HANDLER
+char2_loop
+	and	line_effects, #$80
+	rep	@end_char16, char_cnt
+next_char16
+
+
+	'' even character
+	rfbyte	curchar
+	rfbyte	cureff wc
+	getnib	fgcolor, cureff, #0
+	getnib	bgcolor, cureff, #1
+	
+	' do table lookup on colors
+	alts	fgcolor, #color_Palette
+	mov	fgcolor, 0-0
+	alts	bgcolor, #color_Palette
+	mov	bgcolor, 0-0
+	
+	altgb	curchar, #font_line	' fetch from font table
+	getbyte	curchar
+	test	cureff, line_effects wz
+  if_nz	xor curchar, #$ff		' if effect mask active add a line
+  
+	xcont	m_rf_even, curchar
+	wrlut	bgcolor, #0
+	wrlut	fgcolor, #1
+
+	'' odd character
+	rfbyte	curchar
+	rfbyte	cureff wc
+	getnib	fgcolor, cureff, #0
+	getnib	bgcolor, cureff, #1
+	
+	' do table lookup on colors
+	alts	fgcolor, #color_Palette
+	mov	fgcolor, 0-0
+	alts	bgcolor, #color_Palette
+	mov	bgcolor, 0-0
+	
+	altgb	curchar, #font_line	' fetch from font table
+	getbyte	curchar
+	test	cureff, line_effects wz
+  if_nz	xor curchar, #$ff		' if effect mask active add a line
+  
+	xcont	m_rf_odd, curchar
+	wrlut	bgcolor, #32
+	wrlut	fgcolor, #33
+	
+	'' 
+	'' end of loop
+end_char16
+	ret
+	fit	LINE_HANDLER_END
+
+
+	''''''''''''''''''''''''''''''''''''''''''''''''''
+	' 1 bytes/char
+	' this consists of an 7 bit character; the high bit is
+	' used for blinking
+	'
+	' 16 instructions
+	org	LINE_HANDLER
+char1_loop
+	mov	fgcolor, color_Palette+7
+	mov	bgcolor, color_Palette
+	wrlut	bgcolor, #0
+	wrlut	fgcolor, #1
+	wrlut	bgcolor, #32
+	wrlut	fgcolor, #33
+	and	line_effects, #$80
+	
+	rep	@end_char8, char_cnt
+next_char8
+
+
+	'' even character
+	rfbyte	curchar
+	mov	cureff, curchar
+	and	curchar, #$7f
+	and	cureff, line_effects wz
+	
+	altgb	curchar, #font_line	' fetch from font table
+	getbyte	curchar
+	
+  if_nz	xor curchar, #$ff		' if effect mask active add a line
+	xcont	m_rf_even, curchar
+
+	'' odd character
+	rfbyte	curchar
+	mov	cureff, curchar
+	and	curchar, #$7f
+	and	cureff, line_effects wz
+	
+	altgb	curchar, #font_line	' fetch from font table
+	getbyte	curchar
+	
+  if_nz	xor curchar, #$ff		' if effect mask active add a line
+	xcont	m_rf_odd, curchar
+	
+	'' 
+	'' end of loop
+end_char8
+	ret
+	fit	LINE_HANDLER_END
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''
+'' LUT subroutines for 16 pixel wide fonts
+'' all of these should process a whole line of
+'' output
+''
+'' timing: generally speaking we process an even
+'' and odd character (16 pixels) at a time
+'' assuming a 250 MHz system clock this gives us
+'' the following requirements:
+
+'' 640x480 25 MHz pixel clock: 10 cycles/pixel
+''              so 5*16 == 80 instructions
+'' 800x600 40 MHz pixel clock:  6 cycles/pixel
+''              so 3*16 == 48 instructions
+'' 1024x768 65 MHz pixel clock: 3.75 cycles/pixel
+''              or roughly 30 instructions
+''              
+'' for a 160 MHz system clock:
+'' 640x480:  50 instructions
+'' 800x600:  32 instructions
+'' 1024x768: 19 instructions
+''
+'' The loop as currently set up requires 30 instructions
+'' per 16 pixels, so we need system clock >= 4 * pixel clock
+''''''''''''''''''''''''''''''''''''''''''''''''''
+
+	'' 8 bytes/character
+	'' 24 instructions
+	
+	org	LINE_HANDLER
+word8_loop
+	rep	@end_32bppword, char_cnt
+next_32bppword
+
+	'' even pixel
+	rflong	fgcolor
+	rflong	bgcolor
+	getbyte curchar, fgcolor, #0
+	test	bgcolor, line_effects wz
+	
+	andn	fgcolor, #$FF
+	andn	bgcolor, #$FF
+	altgw	curchar, #font_line	' fetch from font table
+	getword	curchar
+
+  if_nz or	curchar, mask_ffff	' if effect mask active add a line
+	xcont	m_rf_even, curchar
+	wrlut	bgcolor, #0
+	wrlut	fgcolor, #1
+
+	'' odd pixel
+	rflong	fgcolor
+	rflong	bgcolor
+	getbyte curchar, fgcolor, #0
+	test	bgcolor, line_effects wz
+	
+	andn	fgcolor, #$FF
+	andn	bgcolor, #$FF ' handle in the glyphat code
+	altgw	curchar, #font_line	' fetch from font table
+	getword	curchar
+	
+  if_nz or	curchar, mask_ffff	' if effect mask active add a line
+	xcont	m_rf_odd, curchar
+	wrlut	bgcolor, #32
+	wrlut	fgcolor, #33
+	
+	'' 
+	'' end of loop
+end_32bppword
+	ret
+
+	fit	LINE_HANDLER_END
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+	'' 4 bytes/char
+	'' 30 instructions
+	'' so requires sysclock >= 4 * pixel clock
+	
+	org	LINE_HANDLER
+word4_loop
+	rep	@end_8bppword, char_cnt
+next_8bppword
+	'' even character
+	rfbyte	fgcolor
+	rfbyte	bgcolor
+	rfbyte	curchar
+	rfbyte	cureff wc
+
+	' do table lookup on colors
+	alts	fgcolor, #color_Palette
+	mov	fgcolor, 0-0
+	alts	bgcolor, #color_Palette
+	mov	bgcolor, 0-0
+	
+	altgw	curchar, #font_line	' fetch from font table
+	getword	curchar
+	and	cureff, line_effects wz	
+
+	
+  if_nz	muxnc	curchar, mask_ffff		' if effect mask active add a line
+	xcont	m_rf_even, curchar
+	wrlut	bgcolor, #0
+	wrlut	fgcolor, #1
+
+	'' odd character
+	rfbyte	fgcolor
+	rfbyte	bgcolor
+	rfbyte	curchar
+	rfbyte	cureff wc
+
+	' do table lookup on colors
+	alts	fgcolor, #color_Palette
+	mov	fgcolor, 0-0
+	alts	bgcolor, #color_Palette
+	mov	bgcolor, 0-0
+	
+	altgw	curchar, #font_line	' fetch from font table
+	getword	curchar
+	and	cureff, line_effects wz	
+'	test	cureff, #$80 wc
+	
+  if_nz muxnc	curchar, mask_ffff	' if effect mask active add a line
+	xcont	m_rf_odd, curchar
+	wrlut	bgcolor, #32
+	wrlut	fgcolor, #33
+	
+	'' 
+	'' end of loop
+end_8bppword
+	ret
+	fit	LINE_HANDLER_END
+
+	''''''''''''''''''''''''''''''''''''''''''''''''''
+	' 2 bytes/char
+	' this consists of an 8 bit character followed by
+	' 8 bit effects; 1 bit blink, 3 bits bg color, 4 bits fg color
+	'
+	' 30 instructions for 16 pixels
+	' so requires sysclock >= 4 * pixel clock
+	'
+	org	LINE_HANDLER
+word2_loop
+	and	line_effects, #$80
+	rep	@end_word16, char_cnt
+next_word16
+
+
+	'' even character
+	rfbyte	curchar
+	rfbyte	cureff wc
+	getnib	fgcolor, cureff, #0
+	getnib	bgcolor, cureff, #1
+	
+	' do table lookup on colors
+	alts	fgcolor, #color_Palette
+	mov	fgcolor, 0-0
+	alts	bgcolor, #color_Palette
+	mov	bgcolor, 0-0
+	
+	altgw	curchar, #font_line	' fetch from font table
+	getword	curchar
+	test	cureff, line_effects wz
+  if_nz	xor curchar, mask_ffff		' if effect mask active add a line
+  
+	xcont	m_rf_even, curchar
+	wrlut	bgcolor, #0
+	wrlut	fgcolor, #1
+
+	'' odd character
+	rfbyte	curchar
+	rfbyte	cureff wc
+	getnib	fgcolor, cureff, #0
+	getnib	bgcolor, cureff, #1
+	
+	' do table lookup on colors
+	alts	fgcolor, #color_Palette
+	mov	fgcolor, 0-0
+	alts	bgcolor, #color_Palette
+	mov	bgcolor, 0-0
+	
+	altgw	curchar, #font_line	' fetch from font table
+	getword	curchar
+	test	cureff, line_effects wz
+  if_nz	xor curchar, mask_ffff		' if effect mask active add a line
+  
+	xcont	m_rf_odd, curchar
+	wrlut	bgcolor, #32
+	wrlut	fgcolor, #33
+	
+	'' 
+	'' end of loop
+end_word16
+	ret
+	fit	LINE_HANDLER_END
+
+
+	''''''''''''''''''''''''''''''''''''''''''''''''''
+	' 1 bytes/char
+	' this consists of an 7 bit character; the high bit is
+	' used for blinking
+	'
+	' 16 instructions for two characters, so 1 instruction/pixel
+	' that means system clock >= 2 * pixel clock
+	'
+	org	LINE_HANDLER
+word1_loop
+	mov	fgcolor, color_Palette+7
+	mov	bgcolor, color_Palette
+	wrlut	bgcolor, #0
+	wrlut	fgcolor, #1
+	wrlut	bgcolor, #32
+	wrlut	fgcolor, #33
+	and	line_effects, #$80
+	
+	rep	@end_word8, char_cnt
+next_word8
+
+
+	'' even character
+	rfbyte	curchar
+	mov	cureff, curchar
+	and	curchar, #$7f
+	and	cureff, line_effects wz
+	
+	altgw	curchar, #font_line	' fetch from font table
+	getword	curchar
+	
+  if_nz	xor curchar, mask_ffff		' if effect mask active add a line
+	xcont	m_rf_even, curchar
+
+	'' odd character
+	rfbyte	curchar
+	mov	cureff, curchar
+	and	curchar, #$7f
+	and	cureff, line_effects wz
+	
+	altgw	curchar, #font_line	' fetch from font table
+	getword	curchar
+	
+  if_nz	xor curchar, mask_ffff		' if effect mask active add a line
+	xcont	m_rf_odd, curchar
+	
+	'' 
+	'' end of loop
+end_word8
+	ret
+	fit	LINE_HANDLER_END
+
+''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
+
+
+''''''''''''''''''''''''''''''''''''''''''''''''''
+
+DAT
+	org	0
+	' code used to check hardware revision
+	' in rev A (the original silicon) setq + rdlong pa, ptrb++ 
+	'  increments ptrb only once
+	' in rev B (revised silicon) it will increment ptrb appropriately
+        '
+hwcheck
+	mov	pb, ptrb
+	setq	#1
+	rdlong	$1e0, ptrb++
+	subr	pb, ptrb
+	shr	pb, #2 wz
+  if_z	mov	pb, #1
+  	wrlong	pb, ptra
+	cogid	pa
+	cogstop	pa
+	
+	
+'******************************************************************
+'* Spin interfaces
+'******************************************************************
+
+VAR
+  long mycog
+  long hw_rev
+  
+PUB start(params) : tmp | ptr
+
+  ' check what kind of hardware we are using
+  if hw_rev == 0
+      hw_rev := check_hw_rev()
+
+  if hw_rev == 1
+      ' RevA (old) silicon
+      ' change streamer commands
+      ptr := @m_bs
+      tmp := $CF000000
+      long[ptr][0] := tmp ' before sync
+      long[ptr][1] := tmp ' sync
+      long[ptr][2] := tmp ' before visible
+      long[ptr][3] := tmp ' visible
+      ptr := @m_rf_even
+      long[ptr][0] := $8f000000 ' even characters
+      long[ptr][1] := $8f010000 ' odd characters (different LUT base)
+  else
+      ' new silicon
+      ptr := @m_bs
+      tmp := $7f010000
+      long[ptr][0] := tmp
+      long[ptr][1] := tmp
+      long[ptr][2] := tmp
+      long[ptr][3] := tmp
+      ptr := @m_rf_even
+      long[ptr][0] := $0f000000 ' even characters
+      long[ptr][1] := $0f010000 ' odd characters
+
+  mycog := coginit(16, @entry, params) + 1
+  return mycog
+
+'
+' check the hardware revision
+' return 1 for original silicon, 2 for new silicon
+' the difference is in how setq+rdlong works for ptra offsets;
+' ptra++ is applied the appropriate number of times in rev 2 silicon
+'
+
+PRI check_hw_rev() : tmp
+  tmp := 0
+  coginit(16, @hwcheck, @tmp)
+  repeat while tmp == 0
+  return tmp
+
+'
+' stop the tile driver COG
+'
+PUB stop()
+  if mycog
+    cogstop(mycog-1)
+    mycog := 0
+
+con { license }
+
+{{
+
+  Terms of Use: MIT License 
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+}}
+    </code></pre>
+</body>
