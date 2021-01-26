@@ -3505,15 +3505,16 @@ PUB multireturn(angle) : s,c,z
 &apos;&apos; DCA = Digital Attenuator (mult 8*32)
     </code></pre>
     <pre><code>
-PUB Fullsine(x) | q                                  &apos; x is from counter, 13 msbs 0--8192 represents 0--360 degrees
-  q := x &gt;&gt; 11                                          &apos; quadrant, 0 to 3
-  x := (x &amp; $7ff) &lt;&lt; 1                                  &apos; 0 to 90- degrees, adjust to 2048 word addresses.
-  case q                                                &apos; by quadrant
-    0 : result := word[$E000 + x]                       &apos; 
-    1 : result := word[$F001 - x]
-    2 : result := -word[$E000 + x]
-    3 : result := -word[$F001 - x]
-  return   
+CON
+  APINS = 5 addpins 3
+PUB main() | n
+  pinstart(APINS,P_DAC_DITHER_RND,50_80,$8000)
+  
+  repeat
+&#x9;do_stuff(n++)
+&#x9;
+PRI do_stuff(n)
+  wypin(APINS,n.word[0] SCA $FF00)
     </code></pre>
     <pre><code>
 {

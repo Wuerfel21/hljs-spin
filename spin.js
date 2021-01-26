@@ -2,7 +2,7 @@
 Language: Spin/Spin2
 Author: Ada Gottensträter
 Description: highlight.js language definition for Spin/Spin2 files
-Version: 1.2.1
+Version: 1.2.2
 Licensed as whatever you want it to be.
 */
 "use strict";
@@ -19,8 +19,8 @@ Licensed as whatever you want it to be.
     }
     const COMMENT_MODE = hljs.inherit(hljs.COMMENT('\'', '$'),DETECT_PUA);
     const DOCCOMMENT_MODE = hljs.inherit(hljs.COMMENT('\'\'', '$'),DETECT_PUA);
-    const BLOCKCOMMENT_MODE = hljs.inherit(hljs.COMMENT('{', '}'),DETECT_PUA);;
-    const BLOCKDOCCOMMENT_MODE = hljs.inherit(hljs.COMMENT('{{', '}}'),DETECT_PUA);;
+    const BLOCKCOMMENT_MODE = hljs.inherit(hljs.COMMENT('{', '}'),DETECT_PUA);
+    const BLOCKDOCCOMMENT_MODE = hljs.inherit(hljs.COMMENT('{{', '}}'),DETECT_PUA);
     const BLOCKTYPES = 'con obj var pub pri dat ';
     const P1_SPECIAL_CONS = '_CLKMODE _XINFREQ _CLKFREQ _FREE _STACK ';
     const P2_SPECIAL_CONS = '_XINFREQ _CLKFREQ _XTLFREQ _ERRFREQ _RCSLOW _RCFAST _FREE _STACK ';
@@ -39,7 +39,7 @@ Licensed as whatever you want it to be.
     const SPIN_BUILTINS =   'bytefill wordfill longfill bytemove wordmove longmove strsize strcomp lookup lookupz lookdown lookdownz'+ // Spin builtin functions
                             'waitcnt waitpeq waitpne waitvid cogid coginit cogstop locknew lockret clkfreq clkmode clkset '; 
     const SPIN1_BUILTINS = SPIN_BUILTINS + 'lockset lockclr cognew chipver '
-    const SPIN2_BUILTINS = SPIN_BUILTINS +  'hubset cogspin cogchk locktry lockrel lockchk cogatn pollatn waitatn getct pollct waitct waitus waitms getsec getms call regexec regload'+
+    const SPIN2_BUILTINS = SPIN_BUILTINS +  'hubset cogspin cogchk locktry lockrel lockchk cogatn pollatn waitatn getct pollct waitct waitus waitms getsec getms call regexec regload '+
                                             'pinw pinwrite pinl pinlow pinh pinhigh pint pintoggle pinf pinfloat pinr pinread pinstart pinclear wrpin wxpin wypin akpin rdpin rqpin '+
                                             'rotxy polxy xypol qsin qcos muldiv64 getrnd getregs setregs varbase '+
                                             'abs encod decod bmask ones sqrt qlog qexp sar rol rev zerox signx sca scas frac addbits addpins ';
@@ -240,7 +240,7 @@ Licensed as whatever you want it to be.
         case_insensitive: true,
         keywords: { // Initial block is CON...
             keyword: BLOCKTYPES + P1_SPECIAL_CONS + WIDTHS + SPIN1_KEYWORDS + PASM1_KEYWORDS + P1_REGISTERS,
-            built_in: GENERIC_BUILTINS + SPIN_BUILTINS + SPIN_BUILTINS_SPECIAL + P1_MNEMONICS,
+            built_in: GENERIC_BUILTINS + SPIN1_BUILTINS + SPIN_BUILTINS_SPECIAL + P1_MNEMONICS,
             literal: GENERIC_LITERALS + P1_LITERALS,
         },
         illegal: /[;`]/,
@@ -252,7 +252,7 @@ Licensed as whatever you want it to be.
         case_insensitive: true,
         keywords: { // Initial block is CON...
             keyword: BLOCKTYPES + P2_SPECIAL_CONS + WIDTHS + SPIN2_KEYWORDS + PASM2_KEYWORDS + P2_REGISTERS,
-            built_in: GENERIC_BUILTINS + SPIN_BUILTINS + SPIN_BUILTINS_SPECIAL + P2_MNEMONICS,
+            built_in: GENERIC_BUILTINS + SPIN2_BUILTINS + SPIN_BUILTINS_SPECIAL + P2_MNEMONICS,
             literal: GENERIC_LITERALS + P2_LITERALS,
         },
         illegal: /[;`]/,
