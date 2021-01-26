@@ -2,7 +2,7 @@
 Language: Spin/Spin2
 Author: Ada Gottensträter
 Description: highlight.js language definition for Spin/Spin2 files
-Version: 1.2
+Version: 1.2.1
 Licensed as whatever you want it to be.
 */
 "use strict";
@@ -19,8 +19,8 @@ Licensed as whatever you want it to be.
     }
     const COMMENT_MODE = hljs.inherit(hljs.COMMENT('\'', '$'),DETECT_PUA);
     const DOCCOMMENT_MODE = hljs.inherit(hljs.COMMENT('\'\'', '$'),DETECT_PUA);
-    const BLOCKCOMMENT_MODE = hljs.COMMENT('{', '}');
-    const BLOCKDOCCOMMENT_MODE = hljs.COMMENT('{{', '}}');
+    const BLOCKCOMMENT_MODE = hljs.inherit(hljs.COMMENT('{', '}'),DETECT_PUA);;
+    const BLOCKDOCCOMMENT_MODE = hljs.inherit(hljs.COMMENT('{{', '}}'),DETECT_PUA);;
     const BLOCKTYPES = 'con obj var pub pri dat ';
     const P1_SPECIAL_CONS = '_CLKMODE _XINFREQ _CLKFREQ _FREE _STACK ';
     const P2_SPECIAL_CONS = '_XINFREQ _CLKFREQ _XTLFREQ _ERRFREQ _RCSLOW _RCFAST _FREE _STACK ';
