@@ -2,14 +2,23 @@
 Language: Spin/Spin2
 Author: Ada Gottensträter
 Description: highlight.js language definition for Spin/Spin2 files
-Version: 1.1
+Version: 1.2
 Licensed as whatever you want it to be.
 */
 "use strict";
 
 {
-    const COMMENT_MODE = hljs.COMMENT('\'', '$');
-    const DOCCOMMENT_MODE = hljs.COMMENT('\'\'', '$');
+    const PUA_MODE = {
+        className: 'parallax-pua',
+        begin: /[\uF000-\uF0FF]/,
+        end : /(?![\uF000-\uF0FF])/,
+        relevance: 10,
+    };
+    const DETECT_PUA = {
+        contains: [PUA_MODE],
+    }
+    const COMMENT_MODE = hljs.inherit(hljs.COMMENT('\'', '$'),DETECT_PUA);
+    const DOCCOMMENT_MODE = hljs.inherit(hljs.COMMENT('\'\'', '$'),DETECT_PUA);
     const BLOCKCOMMENT_MODE = hljs.COMMENT('{', '}');
     const BLOCKDOCCOMMENT_MODE = hljs.COMMENT('{{', '}}');
     const BLOCKTYPES = 'con obj var pub pri dat ';
@@ -29,7 +38,7 @@ Licensed as whatever you want it to be.
     const GENERIC_BUILTINS = 'float trunc round and or not '; // builtins valid everywhere
     const SPIN_BUILTINS =   'bytefill wordfill longfill bytemove wordmove longmove strsize strcomp lookup lookupz lookdown lookdownz'+ // Spin builtin functions
                             'waitcnt waitpeq waitpne waitvid cogid coginit cogstop locknew lockret clkfreq clkmode clkset '; 
-    const SPIN1_BUILTINS = SPIN_BUILTINS + 'lockset lockclr cognew '
+    const SPIN1_BUILTINS = SPIN_BUILTINS + 'lockset lockclr cognew chipver '
     const SPIN2_BUILTINS = SPIN_BUILTINS +  'hubset cogspin cogchk locktry lockrel lockchk cogatn pollatn waitatn getct pollct waitct waitus waitms getsec getms call regexec regload'+
                                             'pinw pinwrite pinl pinlow pinh pinhigh pint pintoggle pinf pinfloat pinr pinread pinstart pinclear wrpin wxpin wypin akpin rdpin rqpin '+
                                             'rotxy polxy xypol qsin qcos muldiv64 getrnd getregs setregs varbase '+
@@ -159,20 +168,20 @@ Licensed as whatever you want it to be.
                 className: 'params',
                 begin: /(?<=^\s*(pub|pri)\s+\w+\s*)\((?!\))/i, // Does not match Spin2-style "PUB name()" !!!
                 end: /\)/,
-                illegal: /[{}\[\]]/,
+                illegal: /[{}\[\]\&\*]/,
                 contains: [COMMENT_MODE,DOCCOMMENT_MODE,BLOCKCOMMENT_MODE,BLOCKDOCCOMMENT_MODE],
             },
             {
                 className: 'resultvar',
                 begin: /(?<=^\s*(pub|pri)\s+\w+\s*(\(.+\))?\s*\:\s*)\w/i,
-                end: /($|\w(?![\w,]))/,
+                end: /($|(?=\s*['{\|]))/,
                 illegal: /[,;><]/,
                 contains: [COMMENT_MODE,DOCCOMMENT_MODE,BLOCKCOMMENT_MODE,BLOCKDOCCOMMENT_MODE],
             },
             {
                 className: 'locals',
                 begin: /(?<=^\s*(pub|pri)\s+\w+\s*(\(.+\))?\s*(:.*)?\|\s*)\w/i,
-                end: /$/,
+                end: /($|(?=\s*['{]))/,
                 //illegal: /(byte|word|long)/,
                 contains: [COMMENT_MODE,DOCCOMMENT_MODE,BLOCKCOMMENT_MODE,BLOCKDOCCOMMENT_MODE],
                 keywords: {
@@ -182,7 +191,6 @@ Licensed as whatever you want it to be.
             },
             COMMENT_MODE,DOCCOMMENT_MODE,BLOCKCOMMENT_MODE,BLOCKDOCCOMMENT_MODE,
         ],
-        illegal: /\(\)/,
     }
 
         
@@ -202,19 +210,19 @@ Licensed as whatever you want it to be.
                 className: 'params',
                 begin: /(?<=^\s*(pub|pri)\s+\w+\s*)\(/i,
                 end: /\)/,
-                illegal: /[{}\[\]]/,
+                illegal: /[{}\[\]\&\*]/,
                 contains: [COMMENT_MODE,DOCCOMMENT_MODE,BLOCKCOMMENT_MODE,BLOCKDOCCOMMENT_MODE],
             },
             {
                 className: 'resultvar',
                 begin: /(?<=^\s*(pub|pri)\s+\w+\s*(\(.*\))?\s*\:\s*)\w/i,
-                end: /($|\w(?![\w,]))/,
+                end: /($|(?=\s*['{\|]))/,
                 contains: [COMMENT_MODE,DOCCOMMENT_MODE,BLOCKCOMMENT_MODE,BLOCKDOCCOMMENT_MODE],
             },
             {
                 className: 'locals',
                 begin: /(?<=^\s*(pub|pri)\s+\w+\s*(\(.*\))?\s*(:.*)?\|\s*)\w/i,
-                end: /($|\w(?![\w,]))/,
+                end: /($|(?=\s*['{]))/,
                 contains: [COMMENT_MODE,DOCCOMMENT_MODE,BLOCKCOMMENT_MODE,BLOCKDOCCOMMENT_MODE],
                 keywords: {
                     keyword : WIDTHS,
@@ -224,7 +232,6 @@ Licensed as whatever you want it to be.
             },
             COMMENT_MODE,DOCCOMMENT_MODE,BLOCKCOMMENT_MODE,BLOCKDOCCOMMENT_MODE,
         ],
-        illegal: /\(\)/,
     }
 
 
@@ -236,6 +243,7 @@ Licensed as whatever you want it to be.
             built_in: GENERIC_BUILTINS + SPIN_BUILTINS + SPIN_BUILTINS_SPECIAL + P1_MNEMONICS,
             literal: GENERIC_LITERALS + P1_LITERALS,
         },
+        illegal: /[;`]/,
         contains: [COMMENT_MODE,DOCCOMMENT_MODE,BLOCKCOMMENT_MODE,BLOCKDOCCOMMENT_MODE,PREPROCESSOR,STRINGS,NUMBERS,SPIN1_FUNCTIONS],
     }});
 
@@ -247,6 +255,7 @@ Licensed as whatever you want it to be.
             built_in: GENERIC_BUILTINS + SPIN_BUILTINS + SPIN_BUILTINS_SPECIAL + P2_MNEMONICS,
             literal: GENERIC_LITERALS + P2_LITERALS,
         },
+        illegal: /[;`]/,
         contains: [COMMENT_MODE,DOCCOMMENT_MODE,BLOCKCOMMENT_MODE,BLOCKDOCCOMMENT_MODE,PREPROCESSOR,STRINGS,NUMBERS,SPIN2_FUNCTIONS],
     }});
 }

@@ -1218,986 +1218,3259 @@ txcode                  res     1
 }}
     </code></pre>
     <pre><code>
-{{
-'******************************
-'*  VGA tiled image driver
-'*  Copyright 2020 Total Spectrum Software Inc.
-'*  MIT Licensed
-'******************************
-
-Runs in its own COG. See Notes.md for theory of operation.
-
-Four variants are provided:
-
-8 bytes/char: uses full 24 bit color with all effects available         (requires
-4 bytes/char: uses 8bpp for foreground and background, all effects available
-2 bytes/char: uses 16 colors (4bpp) with blinking effect                (requires sysclock >= 4*pixel clock)
-1 byte/char:  only allows 128 characters, 1 bit for blinking, no colors (requires sysclock >= 2*pixel clock)
-
-Methods:
-
-start(params)
-  Starts the driver. "params" is a pointer to a block of 32 bit parameters longs:
-  params[0]: base pin to use for the VGA
-  params[1]: pointer to screen buffer
-  params[2]: number of columns
-  params[3]: number of rows
-  params[4]: pointer to font data
-  params[5]: font width (for now, must be 8 or 16)
-  params[6]: font height
-  params[7]: pixel clock scaling value ($8000_0000 * pixel_clock / system_clock)
-  params[8]: horizontal front porch
-  params[9]: hsync pulse length
-  params[10]: vertical front porch
-  params[11]: vsync lines
-  params[12]: vertical back porch
-  params[13]: polarity: %00 both positive, %10 vertical negative, %01 horizontal negative, %11 both negative
-  params[14]: cell size, i.e. bytes per character (1, 2, 4, or 8)
-  
-  returns 1 + the number of the COG used, or 0 on failure
-}}
-
 CON
-  intensity = 80    '0..128
-
-  FIELD_HANDLER = $300  ' location of pixel subroutine in LUT memory
-  FIELD_HANDLER_END = $3a0
-  LINE_HANDLER = $3a0
-  LINE_HANDLER_END = $3ff
-  
-DAT     
-        org 0
-	'' on entry to the COG, ptra contains the parameter block, and
-	'' ptrb points to the HUB address of the code (@entry)
-entry
-	' read parameters
-basepin_val
-	rdlong	basepin_val, ptra++
-buffer_base
-        rdlong  buffer_base, ptra++
-text_cols
-	rdlong  text_cols, ptra++
-text_rows
-	rdlong  text_rows, ptra++
-font_base
-        rdlong	font_base, ptra++
-font_width
-        rdlong  font_width, ptra++
-font_height
-	rdlong  font_height, ptra++
-fpix_scale
-        rdlong  fpix_scale, ptra++
-hfront_porch
-	rdlong  hfront_porch, ptra++
-hsync_pulse
-        rdlong  hsync_pulse, ptra++
-hback_porch
-	rdlong  hback_porch, ptra++
-vfront_porch
-	rdlong  vfront_porch, ptra++
-vsync_pulse
-	rdlong  vsync_pulse, ptra++
-vback_porch
-	rdlong  vback_porch, ptra++
-polarity
-        rdlong  polarity, ptra++
-	' this must be either 8 (for 32 bit color) or 4 (for 8 bit color)
-bytes_per_char
-	rdlong	bytes_per_char, ptra++
-'
-' Setup 
-'
-' this code can be overwritten once we are going
-'
-
-vga_start
-        ' calculate things based on parameters
-char_cnt
-	mov	char_cnt, text_cols
-strikethru_line
-	shr	char_cnt, #1		' we process 2 characters at a time
-vsync_val
-	mov	strikethru_line, font_height
-stride
-	shr	strikethru_line, #1	' divide height by 2
-stride_chunks
-        mov	stride, text_cols
-hpixels
-        mul     stride, bytes_per_char
-vpixels
-        mov     stride_chunks, stride
-buffer_ptr
-        add     stride_chunks, #63
-font_ptr
-        shr     stride_chunks, #6 ' divide by 64
-mycogid
-        mov     hpixels, text_cols
-font_line_counter
-        mul     hpixels, font_width
-x
-        mov     vpixels, text_rows
-y
-        mul     vpixels, font_height
-
-font_line_cnt
-	' check font width; handle 8 (default) or 16
-	cmp	font_width, #16 wz
-if_z	shl	font_line_bytes, #1
-	mov	font_line_cnt, font_line_bytes
-	shr	font_line_cnt, #2	' convert to longs
-	sub	font_line_cnt, #1
-	
-	' copy parameters into settings
-curchar
-	add	m_rf_even, font_width
-cureff
-	add	m_rf_odd, font_width
-bgcolor
-	add	m_bs, hfront_porch
-fgcolor
-	add	m_sn, hsync_pulse
-	add	m_bv, hback_porch
-	add	m_vi, hpixels
-
-	' put our COG id into the DAC info
-	cogid	mycogid
-	shl	mycogid, #8
-	or 	dacmode_s, mycogid
-	or	dacmode_c, mycogid
-
-        setxfrq fpix_scale       'set transfer frequency
-	mov	vsync_val, basepin_val
-	add	vsync_val, #4
-	
-        ' set up initial polarity
-        test    polarity, #%10 wc
-        drvc    vsync_val
-        test    polarity, #1 wc
-	' NOTE: the setcmod instruction puts its argument in the D field (bits 9-17)
-	' so to set the low bit of the argument, we need to set bit 9 of the instruction
-        bitc    cmodval, #9		' set bit for cmodval
-	
-        'set up level scaling
-        setcy   ##intensity << 24   'r  set colorspace for rgb
-        setci   ##intensity << 16   'g
-        setcq   ##intensity << 08   'b
-cmodval
-	setcmod #%01_0_000_0             'enable colorspace conversion; note low bit is set above
-
-        'RJA dacmodes changed for real P2
-        wrpin   dacmode_s,basepin_val      'enable dac modes in pins 0..3
-	dirh	basepin_val
-	add	basepin_val, #1
-        wrpin   dacmode_c,basepin_val
-	dirh	basepin_val
-	add	basepin_val, #1
-        wrpin   dacmode_c,basepin_val
-	dirh	basepin_val
-	add	basepin_val, #1
-        wrpin   dacmode_c,basepin_val
-	dirh	basepin_val
-
-	' save original ptrb
-	mov	pb, ptrb
-	
-	' load different routines into upper LUT depending on the bytes per char
-	' 8, 4, 2, or 1
-	' ptrb still points at @entry; make it point to the code we want to load
-	'
-	encod	bytes_per_char, bytes_per_char		' convert 1, 2, 4, 8 to 0, 1, 2, 3
-	cmp	font_width, #16 wz
-  if_z	or	bytes_per_char, #4			' offset later in table
-	alts	bytes_per_char, #line_offset_table	' look up in line_offset_table
-	add	pb, 0-0				' the offset we want for the code to load
-
-	' now load the line code into LUT
-	setq2	#(LINE_HANDLER_END-LINE_HANDLER)-1
-	rdlong	(LINE_HANDLER & $1ff), pb
-
-	' and load the field code into LUT
-	add	ptrb, ##(@field_entry - @entry)
-	setq2   #(FIELD_HANDLER_END-FIELD_HANDLER)-1
-	rdlong	(FIELD_HANDLER&$1ff),ptrb
-
-	jmp	#\FIELD_HANDLER
-'
-'
-' Initialized data
-'RJA:  New dacmodes for real P2
-dacmode_s       long    %0000_0000_000_1011000000000_01_00000_0         'hsync is 123-ohm, 3.3V
-dacmode_c       long    %0000_0000_000_1011100000000_01_00000_0         'R/G/B are 75-ohm, 2.0V
-
-m_bs        long    $7F010000 {+HFRONT_PORCH}        'before sync
-m_sn        long    $7F010000 {+HSYNC}        'sync
-m_bv        long    $7F010000 {+HBACK_PORCH}        'before visible
-m_vi        long    $7F010000 {+HPIXELS}       'visible
-
-m_rf_even    long   $0F000000 {+FONT_WIDTH}     ' 1bpp
-m_rf_odd     long   $0F010000 {+FONT_WIDTH}     ' 1bpp LUT immediate
-
-' active character effects for this line
-' these bits have the following meanings:
-'    01 = hide (show all fgground color)
-'    02 = underline
-'    04 = strikethrough
-'    08 = reserved
-'    10 = blinking hide
-'    20 = blinking underline
-'    40 = blinking strikethrough
-'    80 = if hidden, use bgcolor instead of fgcolor
-
-line_effects	long 0
-
-' active effects for this field; the blinking ones will be turned off
-' on half of the fields
-field_effects   long 0
-
-' count of elapsed fields, used for blinking
-field_count	long	0
-
-' number of bytes in a font line (256 for 8 bit wide font)
-font_line_bytes  long 256
-
-	     ' standard ANSI 256 color palette
-color_palette
-	long	$00000000, $80000000, $00800000, $80800000, $00008000, $80008000, $00808000, $c0c0c000
-	long	$80808000, $ff000000, $00ff0000, $ffff0000, $0000ff00, $ff00ff00, $00ffff00, $ffffff00
-	long	$00000000, $00003300, $00006600, $00009900, $0000cc00, $0000ff00, $00330000, $00333300
-	long	$00336600, $00339900, $0033cc00, $0033ff00, $00660000, $00663300, $00666600, $00669900
-	long	$0066cc00, $0066ff00, $00990000, $00993300, $00996600, $00999900, $0099cc00, $0099ff00
-	long	$00cc0000, $00cc3300, $00cc6600, $00cc9900, $00cccc00, $00ccff00, $00ff0000, $00ff3300
-	long	$00ff6600, $00ff9900, $00ffcc00, $00ffff00, $33000000, $33003300, $33006600, $33009900
-	long	$3300cc00, $3300ff00, $33330000, $33333300, $33336600, $33339900, $3333cc00, $3333ff00
-	long	$33660000, $33663300, $33666600, $33669900, $3366cc00, $3366ff00, $33990000, $33993300
-	long	$33996600, $33999900, $3399cc00, $3399ff00, $33cc0000, $33cc3300, $33cc6600, $33cc9900
-	long	$33cccc00, $33ccff00, $33ff0000, $33ff3300, $33ff6600, $33ff9900, $33ffcc00, $33ffff00
-	long	$66000000, $66003300, $66006600, $66009900, $6600cc00, $6600ff00, $66330000, $66333300
-	long	$66336600, $66339900, $6633cc00, $6633ff00, $66660000, $66663300, $66666600, $66669900
-	long	$6666cc00, $6666ff00, $66990000, $66993300, $66996600, $66999900, $6699cc00, $6699ff00
-	long	$66cc0000, $66cc3300, $66cc6600, $66cc9900, $66cccc00, $66ccff00, $66ff0000, $66ff3300
-	long	$66ff6600, $66ff9900, $66ffcc00, $66ffff00, $99000000, $99003300, $99006600, $99009900
-	long	$9900cc00, $9900ff00, $99330000, $99333300, $99336600, $99339900, $9933cc00, $9933ff00
-	long	$99660000, $99663300, $99666600, $99669900, $9966cc00, $9966ff00, $99990000, $99993300
-	long	$99996600, $99999900, $9999cc00, $9999ff00, $99cc0000, $99cc3300, $99cc6600, $99cc9900
-	long	$99cccc00, $99ccff00, $99ff0000, $99ff3300, $99ff6600, $99ff9900, $99ffcc00, $99ffff00
-	long	$cc000000, $cc003300, $cc006600, $cc009900, $cc00cc00, $cc00ff00, $cc330000, $cc333300
-	long	$cc336600, $cc339900, $cc33cc00, $cc33ff00, $cc660000, $cc663300, $cc666600, $cc669900
-	long	$cc66cc00, $cc66ff00, $cc990000, $cc993300, $cc996600, $cc999900, $cc99cc00, $cc99ff00
-	long	$cccc0000, $cccc3300, $cccc6600, $cccc9900, $cccccc00, $ccccff00, $ccff0000, $ccff3300
-	long	$ccff6600, $ccff9900, $ccffcc00, $ccffff00, $ff000000, $ff003300, $ff006600, $ff009900
-	long	$ff00cc00, $ff00ff00, $ff330000, $ff333300, $ff336600, $ff339900, $ff33cc00, $ff33ff00
-	long	$ff660000, $ff663300, $ff666600, $ff669900, $ff66cc00, $ff66ff00, $ff990000, $ff993300
-	long	$ff996600, $ff999900, $ff99cc00, $ff99ff00, $ffcc0000, $ffcc3300, $ffcc6600, $ffcc9900
-	long	$ffcccc00, $ffccff00, $ffff0000, $ffff3300, $ffff6600, $ffff9900, $ffffcc00, $ffffff00
-	long	$08080800, $12121200, $1c1c1c00, $26262600, $30303000, $3a3a3a00, $44444400, $4e4e4e00
-	long	$58585800, $62626200, $6c6c6c00, $76767600, $80808000, $8a8a8a00, $94949400, $9e9e9e00
-	long	$a8a8a800, $b2b2b200, $bcbcbc00, $c6c6c600, $d0d0d000, $dadada00, $e4e4e400, $eeeeee00
-
-
-' space for 256 bytes of font data (256 characters * 2 byte/char)
-font_line byte 0[512]
-
-' table of offsets to the character handling subroutines
-line_offset_table
-	long	@char1_loop - @entry
-	long	@char2_loop - @entry
-	long	@char4_loop - @entry
-	long	@char8_loop - @entry
-	
-	long	@word1_loop - @entry
-	long	@word2_loop - @entry
-	long	@word4_loop - @entry
-	long	@word8_loop - @entry
-
-mask_ffff
-	long	$ffff
-	
-	fit	$1f0
-
-	org	FIELD_HANDLER
-'
-'
-' Field loop
-'
-field_entry
-	mov     y,vfront_porch           'top blanks
-        call    #blank
-	mov	buffer_ptr, buffer_base
-	mov	font_ptr, font_base
-	mov	font_line_counter, font_height
-	add	field_count, #1
-	test	field_count, #32 wz
-  if_z	mov	field_effects, #$ff
-  if_nz mov	field_effects, #$0f
-  
-        mov     y,vpixels          'set visible line
-line    
-        call    #hsync          'do horizontal sync; also loads up next font line
-
-	' now read the character data
-	' this is stored as 8 byte per character;
-	' two longs, first containing 24 bit color + character glyph,
-        ' second containing the 24 bit color and a reserved field
-	rdfast stride_chunks, buffer_ptr
-
-	sub	font_line_counter, #1 wz
-if_z	mov	font_line_counter, font_height
-if_z	mov	font_ptr, font_base
-if_z	add	buffer_ptr, stride ' next line
-
-	'' check for effects on this line
-	mov	line_effects, #$91
-	cmp	font_line_counter, #1 wz
-if_z	or	line_effects, #$22
-	cmp	font_line_counter, strikethru_line wz
-if_z    or	line_effects, #$44
-
-	'' turn off blink specific stuff
-	and	line_effects, field_effects
-
-	''
-	'' the main loop processes 2 characters (16 pixels) at a time,
-	'' ping-ponging between even and odd
-	''
-	' we use LUT elements 0,1 and 32,33 to hold the colors, ping-ponging back
-	' between them
-	' we have to use 32,33 because the granularity of changing the streamer
-	' LUT pointer is 5 bits
-	call	#\LINE_HANDLER 	 ' call the pixel loop
-	djnz	y, #line
-
-end_of_line
-        mov	y,vback_porch           'bottom blanks
-        call    #blank
-
-        drvnot  vsync_val          'sync on
-
-        mov 	y,vsync_pulse      'sync blanks
-        call    #blank
-
-        drvnot  vsync_val          'sync off
-
-        jmp     #field_entry       'loop
-
-	
-'
-'
-' Subroutines
-'
-blank       call    #hsync          'blank lines
-            xcont   m_vi,#0
-    _ret_   djnz    y,#blank
-
-hsync       xcont   m_bs,#0         'horizontal sync
-            xcont   m_sn,#1
-	xcont m_bv, #0
-	'setq	#63		' read 64 longs = 256 bytes from font table
-	setq	font_line_cnt	' read data from font table
-	rdlong	font_line, font_ptr
-  _ret_	add	font_ptr, font_line_bytes
-
-
-  	fit	FIELD_HANDLER_END
-	
-''''''''''''''''''''''''''''''''''''''''''''''''''
-'' LUT subroutines for 8 pixel wide fonts
-'' all of these should process a whole line of
-'' output
-''
-'' timing: generally speaking we process an even
-'' and odd character (16 pixels) at a time
-'' assuming a 250 MHz system clock this gives us
-'' the following requirements:
-
-'' 640x480 25 MHz pixel clock: 10 cycles/pixel
-''              so 5*16 == 80 instructions
-'' 800x600 40 MHz pixel clock:  6 cycles/pixel
-''              so 3*16 == 48 instructions
-'' 1024x768 65 MHz pixel clock: 3.75 cycles/pixel
-''              or roughly 30 instructions
-''              
-'' for a 160 MHz system clock:
-'' 640x480:  50 instructions
-'' 800x600:  32 instructions
-'' 1024x768: 19 instructions
-''''''''''''''''''''''''''''''''''''''''''''''''''
-
-	'' 8 bytes/character
-	'' 24 instructions: so sysclock >= 3 * pixel clock
-	
-	org	LINE_HANDLER
-char8_loop
-	rep	@end_32bppchar, char_cnt
-next_32bppchar
-
-	'' even pixel
-	rflong	fgcolor
-	rflong	bgcolor
-	getbyte curchar, fgcolor, #0
-	test	bgcolor, line_effects wz
-	
-	andn	fgcolor, #$FF
-	andn	bgcolor, #$FF
-	altgb	curchar, #font_line	' fetch from font table
-	getbyte	curchar
-
-  if_nz or	curchar, #$ff		' if effect mask active add a line
-	xcont	m_rf_even, curchar
-	wrlut	bgcolor, #0
-	wrlut	fgcolor, #1
-
-	'' odd pixel
-	rflong	fgcolor
-	rflong	bgcolor
-	getbyte curchar, fgcolor, #0
-	test	bgcolor, line_effects wz
-	
-	andn	fgcolor, #$FF
-	andn	bgcolor, #$FF ' handle in the glyphat code
-	altgb	curchar, #font_line	' fetch from font table
-	getbyte	curchar
-	
-  if_nz or	curchar, #$ff		' if effect mask active add a line
-	xcont	m_rf_odd, curchar
-	wrlut	bgcolor, #32
-	wrlut	fgcolor, #33
-	
-	'' 
-	'' end of loop
-end_32bppchar
-	ret
-
-	fit	LINE_HANDLER_END
-
-''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-	'' 4 bytes/char
-	'' 30 instructions
-	
-	org	LINE_HANDLER
-char4_loop
-	rep	@end_8bppchar, char_cnt
-next_8bppchar
-	'' even character
-	rfbyte	fgcolor
-	rfbyte	bgcolor
-	rfbyte	curchar
-	rfbyte	cureff wc
-
-	' do table lookup on colors
-	alts	fgcolor, #color_Palette
-	mov	fgcolor, 0-0
-	alts	bgcolor, #color_Palette
-	mov	bgcolor, 0-0
-	
-	altgb	curchar, #font_line	' fetch from font table
-	getbyte	curchar
-	and	cureff, line_effects wz	
-
-	
-  if_nz	muxnc	curchar, #$ff		' if effect mask active add a line
-	xcont	m_rf_even, curchar
-	wrlut	bgcolor, #0
-	wrlut	fgcolor, #1
-
-	'' odd character
-	rfbyte	fgcolor
-	rfbyte	bgcolor
-	rfbyte	curchar
-	rfbyte	cureff wc
-
-	' do table lookup on colors
-	alts	fgcolor, #color_Palette
-	mov	fgcolor, 0-0
-	alts	bgcolor, #color_Palette
-	mov	bgcolor, 0-0
-	
-	altgb	curchar, #font_line	' fetch from font table
-	getbyte	curchar
-	and	cureff, line_effects wz	
-'	test	cureff, #$80 wc
-	
-  if_nz muxnc	curchar, #$ff		' if effect mask active add a line
-	xcont	m_rf_odd, curchar
-	wrlut	bgcolor, #32
-	wrlut	fgcolor, #33
-	
-	'' 
-	'' end of loop
-end_8bppchar
-	ret
-	fit	LINE_HANDLER_END
-
-	''''''''''''''''''''''''''''''''''''''''''''''''''
-	' 2 bytes/char
-	' this consists of an 8 bit character followed by
-	' 8 bit effects; 1 bit blink, 3 bits bg color, 4 bits fg color
-	'
-	' 30 instructions
-	org	LINE_HANDLER
-char2_loop
-	and	line_effects, #$80
-	rep	@end_char16, char_cnt
-next_char16
-
-
-	'' even character
-	rfbyte	curchar
-	rfbyte	cureff wc
-	getnib	fgcolor, cureff, #0
-	getnib	bgcolor, cureff, #1
-	
-	' do table lookup on colors
-	alts	fgcolor, #color_Palette
-	mov	fgcolor, 0-0
-	alts	bgcolor, #color_Palette
-	mov	bgcolor, 0-0
-	
-	altgb	curchar, #font_line	' fetch from font table
-	getbyte	curchar
-	test	cureff, line_effects wz
-  if_nz	xor curchar, #$ff		' if effect mask active add a line
-  
-	xcont	m_rf_even, curchar
-	wrlut	bgcolor, #0
-	wrlut	fgcolor, #1
-
-	'' odd character
-	rfbyte	curchar
-	rfbyte	cureff wc
-	getnib	fgcolor, cureff, #0
-	getnib	bgcolor, cureff, #1
-	
-	' do table lookup on colors
-	alts	fgcolor, #color_Palette
-	mov	fgcolor, 0-0
-	alts	bgcolor, #color_Palette
-	mov	bgcolor, 0-0
-	
-	altgb	curchar, #font_line	' fetch from font table
-	getbyte	curchar
-	test	cureff, line_effects wz
-  if_nz	xor curchar, #$ff		' if effect mask active add a line
-  
-	xcont	m_rf_odd, curchar
-	wrlut	bgcolor, #32
-	wrlut	fgcolor, #33
-	
-	'' 
-	'' end of loop
-end_char16
-	ret
-	fit	LINE_HANDLER_END
-
-
-	''''''''''''''''''''''''''''''''''''''''''''''''''
-	' 1 bytes/char
-	' this consists of an 7 bit character; the high bit is
-	' used for blinking
-	'
-	' 16 instructions
-	org	LINE_HANDLER
-char1_loop
-	mov	fgcolor, color_Palette+7
-	mov	bgcolor, color_Palette
-	wrlut	bgcolor, #0
-	wrlut	fgcolor, #1
-	wrlut	bgcolor, #32
-	wrlut	fgcolor, #33
-	and	line_effects, #$80
-	
-	rep	@end_char8, char_cnt
-next_char8
-
-
-	'' even character
-	rfbyte	curchar
-	mov	cureff, curchar
-	and	curchar, #$7f
-	and	cureff, line_effects wz
-	
-	altgb	curchar, #font_line	' fetch from font table
-	getbyte	curchar
-	
-  if_nz	xor curchar, #$ff		' if effect mask active add a line
-	xcont	m_rf_even, curchar
-
-	'' odd character
-	rfbyte	curchar
-	mov	cureff, curchar
-	and	curchar, #$7f
-	and	cureff, line_effects wz
-	
-	altgb	curchar, #font_line	' fetch from font table
-	getbyte	curchar
-	
-  if_nz	xor curchar, #$ff		' if effect mask active add a line
-	xcont	m_rf_odd, curchar
-	
-	'' 
-	'' end of loop
-end_char8
-	ret
-	fit	LINE_HANDLER_END
-
-
-''''''''''''''''''''''''''''''''''''''''''''''''''
-'' LUT subroutines for 16 pixel wide fonts
-'' all of these should process a whole line of
-'' output
-''
-'' timing: generally speaking we process an even
-'' and odd character (16 pixels) at a time
-'' assuming a 250 MHz system clock this gives us
-'' the following requirements:
-
-'' 640x480 25 MHz pixel clock: 10 cycles/pixel
-''              so 5*16 == 80 instructions
-'' 800x600 40 MHz pixel clock:  6 cycles/pixel
-''              so 3*16 == 48 instructions
-'' 1024x768 65 MHz pixel clock: 3.75 cycles/pixel
-''              or roughly 30 instructions
-''              
-'' for a 160 MHz system clock:
-'' 640x480:  50 instructions
-'' 800x600:  32 instructions
-'' 1024x768: 19 instructions
-''
-'' The loop as currently set up requires 30 instructions
-'' per 16 pixels, so we need system clock >= 4 * pixel clock
-''''''''''''''''''''''''''''''''''''''''''''''''''
-
-	'' 8 bytes/character
-	'' 24 instructions
-	
-	org	LINE_HANDLER
-word8_loop
-	rep	@end_32bppword, char_cnt
-next_32bppword
-
-	'' even pixel
-	rflong	fgcolor
-	rflong	bgcolor
-	getbyte curchar, fgcolor, #0
-	test	bgcolor, line_effects wz
-	
-	andn	fgcolor, #$FF
-	andn	bgcolor, #$FF
-	altgw	curchar, #font_line	' fetch from font table
-	getword	curchar
-
-  if_nz or	curchar, mask_ffff	' if effect mask active add a line
-	xcont	m_rf_even, curchar
-	wrlut	bgcolor, #0
-	wrlut	fgcolor, #1
-
-	'' odd pixel
-	rflong	fgcolor
-	rflong	bgcolor
-	getbyte curchar, fgcolor, #0
-	test	bgcolor, line_effects wz
-	
-	andn	fgcolor, #$FF
-	andn	bgcolor, #$FF ' handle in the glyphat code
-	altgw	curchar, #font_line	' fetch from font table
-	getword	curchar
-	
-  if_nz or	curchar, mask_ffff	' if effect mask active add a line
-	xcont	m_rf_odd, curchar
-	wrlut	bgcolor, #32
-	wrlut	fgcolor, #33
-	
-	'' 
-	'' end of loop
-end_32bppword
-	ret
-
-	fit	LINE_HANDLER_END
-
-''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-	'' 4 bytes/char
-	'' 30 instructions
-	'' so requires sysclock >= 4 * pixel clock
-	
-	org	LINE_HANDLER
-word4_loop
-	rep	@end_8bppword, char_cnt
-next_8bppword
-	'' even character
-	rfbyte	fgcolor
-	rfbyte	bgcolor
-	rfbyte	curchar
-	rfbyte	cureff wc
-
-	' do table lookup on colors
-	alts	fgcolor, #color_Palette
-	mov	fgcolor, 0-0
-	alts	bgcolor, #color_Palette
-	mov	bgcolor, 0-0
-	
-	altgw	curchar, #font_line	' fetch from font table
-	getword	curchar
-	and	cureff, line_effects wz	
-
-	
-  if_nz	muxnc	curchar, mask_ffff		' if effect mask active add a line
-	xcont	m_rf_even, curchar
-	wrlut	bgcolor, #0
-	wrlut	fgcolor, #1
-
-	'' odd character
-	rfbyte	fgcolor
-	rfbyte	bgcolor
-	rfbyte	curchar
-	rfbyte	cureff wc
-
-	' do table lookup on colors
-	alts	fgcolor, #color_Palette
-	mov	fgcolor, 0-0
-	alts	bgcolor, #color_Palette
-	mov	bgcolor, 0-0
-	
-	altgw	curchar, #font_line	' fetch from font table
-	getword	curchar
-	and	cureff, line_effects wz	
-'	test	cureff, #$80 wc
-	
-  if_nz muxnc	curchar, mask_ffff	' if effect mask active add a line
-	xcont	m_rf_odd, curchar
-	wrlut	bgcolor, #32
-	wrlut	fgcolor, #33
-	
-	'' 
-	'' end of loop
-end_8bppword
-	ret
-	fit	LINE_HANDLER_END
-
-	''''''''''''''''''''''''''''''''''''''''''''''''''
-	' 2 bytes/char
-	' this consists of an 8 bit character followed by
-	' 8 bit effects; 1 bit blink, 3 bits bg color, 4 bits fg color
-	'
-	' 30 instructions for 16 pixels
-	' so requires sysclock >= 4 * pixel clock
-	'
-	org	LINE_HANDLER
-word2_loop
-	and	line_effects, #$80
-	rep	@end_word16, char_cnt
-next_word16
-
-
-	'' even character
-	rfbyte	curchar
-	rfbyte	cureff wc
-	getnib	fgcolor, cureff, #0
-	getnib	bgcolor, cureff, #1
-	
-	' do table lookup on colors
-	alts	fgcolor, #color_Palette
-	mov	fgcolor, 0-0
-	alts	bgcolor, #color_Palette
-	mov	bgcolor, 0-0
-	
-	altgw	curchar, #font_line	' fetch from font table
-	getword	curchar
-	test	cureff, line_effects wz
-  if_nz	xor curchar, mask_ffff		' if effect mask active add a line
-  
-	xcont	m_rf_even, curchar
-	wrlut	bgcolor, #0
-	wrlut	fgcolor, #1
-
-	'' odd character
-	rfbyte	curchar
-	rfbyte	cureff wc
-	getnib	fgcolor, cureff, #0
-	getnib	bgcolor, cureff, #1
-	
-	' do table lookup on colors
-	alts	fgcolor, #color_Palette
-	mov	fgcolor, 0-0
-	alts	bgcolor, #color_Palette
-	mov	bgcolor, 0-0
-	
-	altgw	curchar, #font_line	' fetch from font table
-	getword	curchar
-	test	cureff, line_effects wz
-  if_nz	xor curchar, mask_ffff		' if effect mask active add a line
-  
-	xcont	m_rf_odd, curchar
-	wrlut	bgcolor, #32
-	wrlut	fgcolor, #33
-	
-	'' 
-	'' end of loop
-end_word16
-	ret
-	fit	LINE_HANDLER_END
-
-
-	''''''''''''''''''''''''''''''''''''''''''''''''''
-	' 1 bytes/char
-	' this consists of an 7 bit character; the high bit is
-	' used for blinking
-	'
-	' 16 instructions for two characters, so 1 instruction/pixel
-	' that means system clock >= 2 * pixel clock
-	'
-	org	LINE_HANDLER
-word1_loop
-	mov	fgcolor, color_Palette+7
-	mov	bgcolor, color_Palette
-	wrlut	bgcolor, #0
-	wrlut	fgcolor, #1
-	wrlut	bgcolor, #32
-	wrlut	fgcolor, #33
-	and	line_effects, #$80
-	
-	rep	@end_word8, char_cnt
-next_word8
-
-
-	'' even character
-	rfbyte	curchar
-	mov	cureff, curchar
-	and	curchar, #$7f
-	and	cureff, line_effects wz
-	
-	altgw	curchar, #font_line	' fetch from font table
-	getword	curchar
-	
-  if_nz	xor curchar, mask_ffff		' if effect mask active add a line
-	xcont	m_rf_even, curchar
-
-	'' odd character
-	rfbyte	curchar
-	mov	cureff, curchar
-	and	curchar, #$7f
-	and	cureff, line_effects wz
-	
-	altgw	curchar, #font_line	' fetch from font table
-	getword	curchar
-	
-  if_nz	xor curchar, mask_ffff		' if effect mask active add a line
-	xcont	m_rf_odd, curchar
-	
-	'' 
-	'' end of loop
-end_word8
-	ret
-	fit	LINE_HANDLER_END
-
-''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''''
-
-
-''''''''''''''''''''''''''''''''''''''''''''''''''
+{{                                                                           
+    #############   ###############   ###############   #############          
+    #############   ###############   ###############   #############          
+  ###############   ###############   ###############   ###############        
+  ###############   ###############   ###############   ###############        
+  ####              ####       ####         ###         ####       ####        
+  ####              ####       ####         ###         ####       ####        
+  ###############   ####       ####         ###         ####       ####        
+  ###############   ###############         ###         ####       ####        
+  ###############   ###############         ###         ####       ####        
+             ####   #############           ###         ####       ####        
+             ####   #############           ###         ####       ####        
+  ###############   ####              ###############   ####       ####        
+  ###############   ####              ###############   ####       ####        
+  #############     ####              ###############   ####       ####        
+  #############     ####              ###############   ####       ####        
+                                                                               
+                                                                               
+                ##    ## ######## ##    ##  ####### ########  ####### #######  
+                ##    ## ######## ##    ## ######## ######## ######## ######## 
+                ##    ## ##       ##    ## ##    ## ##       ##    ## ##    ## 
+                ######## ########  ######  ##    ## ##    ## ##    ## ##    ## 
+                ######## ########  ######  ######## ##    ## ##    ## ##    ## 
+                ##    ## ##       ##    ## ######## ##    ## ##    ## ##    ## 
+                ##    ## ######## ##    ## ##    ## ######## ######## ##    ## 
+                ##    ##  ####### ##    ## ##    ## #######  #######  ##    ## 
+
+Release Candidate 4
+                
+2020 IRQsome Software
+Distributed under permission from Terry Cavanagh
+
+Original by Terry Cavanagh
+Music by Chipzel
+Voice by Jenn Frank
+
+}}                                                                               
+
+
+
+
+
+
+
+
+_clkmode = xtal1 + pll16x
+_xinfreq = 5_000_000
+_stack   = 200
+
+
+
+CHEATZ = 0 &apos; 0 for no cheats, 1 for minor cheats, 2 for noclip
+
+
+
+
+
+
+ SCANLINE_BUFFER = gfx#SCANLINE_BUFFER
+  NUM_LINES = gfx#NUM_LINES
+                                               
+ border_color                   = gfx#border_color &apos; border color
+ displaylist_adr                = gfx#displaylist_adr &apos;pointer to display list
+ displaylist_in_use             = gfx#displaylist_in_use &apos;display list adress feedback
+
+ END_OF_DRIVER_RESERVED = gfx#MEMORY_END
+
+ DLIST_SIZE = 640 &apos; longs
+
+ _free    = ($8000-END_OF_DRIVER_RESERVED+3)/4   
+
+OBJ
+
+gfx : &quot;VJET_v00_composite_wrapper_xasm.spin&quot;
+kb  : &quot;Keyboard_xasm.spin&quot;
+pst: &quot;DummyPST&quot;&apos;}&quot;Parallax Serial Terminal&quot;
+gl  : &quot;VJET_v00_displaylist.spin&quot; 
+font: &quot;hexfont.spin&quot;
+sdda: &quot;hexagon_sdda.spin&quot;
+plat: &quot;platform.spin&quot;
+
+DAT &apos;&apos; pretend this is a VAR (non-zero-initialized variables and some byte/word wide ones go here to help make fastspin happy)
+org
+random long 42
+
+color1 word $0202
+color2 word $0202 
+color3 word $0202
+
+sector_angles word 0*(8192/SECTORS),1*(8192/SECTORS),2*(8192/SECTORS),3*(8192/SECTORS),4*(8192/SECTORS),5*(8192/SECTORS)
+
+stage byte 0
+state byte TITLE
+
+safe_colors byte false &apos; change to true when using S-Video (disables $x8 colors)
+
+firstplay_flag byte 0
+current_music byte -1
+
+strbuf_hi byte 0[8] &apos; current stage hiscore string buffer
+
+strbuf_frames byte 0[4] &apos; current timer string buffers  
+strbuf_secs byte 0[4]
+
+strbuf2_frames byte 0[4]
+strbuf2_secs byte 0[4] &apos; misc.
+
+DAT &apos;&apos; some lookup tables and strings
+
+leveltimetbl word
+word  0*60 &apos; Point
+word 10*60 &apos; Line
+word 20*60 &apos; Triangle
+word 30*60 &apos; Square
+word 45*60 &apos; Pentagon
+word 60*60 &apos; Hexagon
+word 0 &apos; convenient zero
+
+levelstringtbl word 
+word @point_str
+word @line_str
+word @triangle_str
+word @square_str
+word @pentagon_str
+word @hexagon_str
+
+stagestringtbl word 
+word @hexagon_str
+word @hexagoner_str
+word @hexagonest_str
+word @hexagon_str
+word @hexagoner_str
+word @hexagonest_str
+word @blackwhite_str
+
+stagedifficultytbl word 
+word @hard_str
+word @harder_str
+word @hardest_str
+word @hardester_str
+word @hardestest_str
+word @hardestestest_str
+word @hexagon_str
+
+stage2effstage_tbl byte
+byte EFF_HEXAGON1,EFF_HEXAGONER1,EFF_HEXAGONEST1,EFF_HEXAGON2,EFF_HEXAGONER2,EFF_HEXAGONEST2,EFF_BLACKWHITE
+
+new_record_str byte &quot;NEW &quot;
+record_str byte &quot;RECORD!&quot;,0
+hyper_str byte &quot;HYPER&quot;,0
 
 DAT
-	org	0
-	' code used to check hardware revision
-	' in rev A (the original silicon) setq + rdlong pa, ptrb++ 
-	'  increments ptrb only once
-	' in rev B (revised silicon) it will increment ptrb appropriately
-        '
-hwcheck
-	mov	pb, ptrb
-	setq	#1
-	rdlong	$1e0, ptrb++
-	subr	pb, ptrb
-	shr	pb, #2 wz
-  if_z	mov	pb, #1
-  	wrlong	pb, ptra
-	cogid	pa
-	cogstop	pa
-	
-	
-'******************************************************************
-'* Spin interfaces
-'******************************************************************
+long
+org
+save_space
+stage_records long 0[STAGE_COUNT]
+long 0[sdda#SAVE_SIZE-STAGE_COUNT] &apos;reserve some data
 
-VAR
-  long mycog
-  long hw_rev
+org
+dlist_space &apos;&apos; Display lists overwrite cog PASM
+render_asm file &quot;VJET_v00_rendering.dat&quot;
+tv_asm file &quot;VJET_v00_composite.dat&quot;
+sdda_asm file &quot;tinySDDA.dat&quot;
+keyboard_asm file &quot;Keyboard.dat&quot;
+
+long $00[DLIST_SIZE*2-$]
+    
+VAR       
+
+long state_timer, game_timer
+word script_timer &apos; the wait times are limited to 15 bits, anyways
+
+long view_scale_y,center_x,center_y
+word player_angle 
+long playfield_speed
+word playfield_rotation
+
+byte effectivestage
+byte hitflag
+byte playfield_colorswap
+byte player_sector
+byte colorswap_timer            
+
+long wall_phase
+byte wall_spawnpos
+
+word wall_speed,player_speed
+long speed_target &apos; for playfield_speed
+
+
+word fontptr,subcodeptr
+
+long next_pattern
+word patternlist
+
+word script_pc  
+
+byte overflow_flag,commit_record_flag,gameover_newrecord_flag
+
+long framecount
+long snes_prev
+
+long polybuf[SECTORS*2*4]
+long sector_vx[SECTORS],sector_vy[SECTORS]
+
+&apos;long sector_walls[SECTORS*WALLBUFFER_SIZE]
+&apos;long walls_low[SECTORS],walls_high[SECTORS]
+byte _dummy,wallbitmap[WALLBUFFER_SIZE]
+
+
+word dlist1ptr,dlist2ptr
+
+
+&apos;long dlist1[DLIST_SIZE],dlist2[DLIST_SIZE]
+
+CON &apos;&apos; Enumerations
+ #0,HEXAGON,HEXAGONER,HEXAGONEST,HYPER_HEXAGON,HYPER_HEXAGONER,HYPER_HEXAGONEST,BLACKWHITE,STAGE_COUNT 
+
+ #0,EFF_TITLE,EFF_HEXAGON1,EFF_HEXAGON2,EFF_HEXAGON3,EFF_HEXAGONER1,EFF_HEXAGONER2,EFF_HEXAGONER3,EFF_HEXAGONEST1,EFF_HEXAGONEST2,EFF_BLACKWHITE
+
+ #0,TITLE,LEVELSELECT,PLAY,GAMEOVER
+
+
+PUB main
+
+init
+repeat     
+  do_frame
   
-PUB start(params) : tmp | ptr
+PRI do_frame | tmp
 
-  ' check what kind of hardware we are using
-  if hw_rev == 0
-      hw_rev := check_hw_rev()
-
-  if hw_rev == 1
-      ' RevA (old) silicon
-      ' change streamer commands
-      ptr := @m_bs
-      tmp := $CF000000
-      long[ptr][0] := tmp ' before sync
-      long[ptr][1] := tmp ' sync
-      long[ptr][2] := tmp ' before visible
-      long[ptr][3] := tmp ' visible
-      ptr := @m_rf_even
-      long[ptr][0] := $8f000000 ' even characters
-      long[ptr][1] := $8f010000 ' odd characters (different LUT base)
+  gfx.Wait_Vsync
+  if overflow_flag~
+    tmp:=$CC
   else
-      ' new silicon
-      ptr := @m_bs
-      tmp := $7f010000
-      long[ptr][0] := tmp
-      long[ptr][1] := tmp
-      long[ptr][2] := tmp
-      long[ptr][3] := tmp
-      ptr := @m_rf_even
-      long[ptr][0] := $0f000000 ' even characters
-      long[ptr][1] := $0f010000 ' odd characters
+    tmp:=$2D
+  word[border_color]:=tmp
+  ifnot framecount&amp;1
+    word[displaylist_adr] := dlist1ptr
+    gl.start(dlist2ptr,constant(DLIST_SIZE*4)) 
+  else
+    word[displaylist_adr] := dlist2ptr
+    gl.start(dlist1ptr,constant(DLIST_SIZE*4))
+  framecount++
+  &apos;framecount &amp;= $1f
+  &apos;longmove(current_dlist,@testdlist,128) 
+  
+  update
+  if tmp := \draw
+    pst.str(string(&quot;ABORT &quot;))
+    pst.dec(tmp)
+    pst.newline
 
-  mycog := coginit(16, @entry, params) + 1
-  return mycog
+  if tmp:=gl.done
+    overflow_flag~~
+    pst.str(string(&quot;DLIST OVRFLOW: &quot;))
+    pst.dec(tmp)
+    pst.newline
+   
+  
+  &apos;pst.str(string(&quot;onek &quot;))
+  &apos;pst.hex(framecount,8)
+  &apos;pst.newline
+  word[border_color]:=$04
+  &apos;word[@testdlist][1] := 50+(sin(framecount*63)/2048)
+  &apos;word[@testdlist][2] := word[@testdlist][1]+20
 
-'
-' check the hardware revision
-' return 1 for original silicon, 2 for new silicon
-' the difference is in how setq+rdlong works for ptra offsets;
-' ptra++ is applied the appropriate number of times in rev 2 silicon
-'
+PRI init
+pst.start(115_200)
 
-PRI check_hw_rev() : tmp
-  tmp := 0
-  coginit(16, @hwcheck, @tmp)
-  repeat while tmp == 0
-  return tmp
+if sdda.unstash
+  subcodeptr:= sdda.sdda_start(@sdda_asm)
+else
+  subcodeptr:= $8080
 
-'
-' stop the tile driver COG
-'
-PUB stop()
-  if mycog
-    cogstop(mycog-1)
-    mycog := 0
+&apos; try loading the saved records - remains zero-initialized otherwise
+sdda.readsavedata(@save_space)
 
-con { license }
 
+kb.startx(plat#PS2_DATA,plat#PS2_CLOCK,%0_111_001, %11_11111,@keyboard_asm)
+ 
+word[displaylist_adr] := $8080
+&apos;&apos;set up graphics driver
+gfx.start(plat#TV_PINGROUP,4,@render_asm,@tv_asm) &apos;start graphics driver
+
+dlist1ptr := @dlist_space
+dlist2ptr := @dlist_space+constant(DLIST_SIZE*4)
+longfill(@dlist_space,0,constant(DLIST_SIZE*2)) &apos; this is neccessary to make sure the graphics cogs don&apos;t go off the deep end
+
+gl.set_clip(0,gfx#HEIGHT&lt;&lt;16,0,gfx#WIDTH&lt;&lt;16)
+
+fontptr := font.get
+
+clearwalls
+  
+CON
+
+  PRESCALE_SHL = 6
+  PRESCALE = |&lt;PRESCALE_SHL
+
+  PIXEL_ASPECT = 35.5/28.0 &apos;&apos; Aspect ratio of a pixel - empircal measurement
+  VIRTUAL_WIDTH = float(gfx#WIDTH)*PIXEL_ASPECT
+  VIRTUAL_HEIGHT = float(gfx#HEIGHT)
+  PIXEL_ASPECT_FIX  = round(float(posx)/PIXEL_ASPECT)
+  
+  SECTORS = 6
+  WALLBUFFER_SIZE = 48
+
+  WALL_PARKED = negx/2
+
+  PLAYFIELD_RADIUS = 1024
+
+
+  PATTERN_UNIT = 16
+
+  PATTERN_PTR_MASK = $F_FFFF &apos; P2 ready!
+  PATTERN_CW       = 0
+  PATTERN_CCW      = |&lt;31
+  PATTERN_OFFSET_SHIFT = 28
+  PATTERN_OFFSET_MASK = $7
+  PATTERN_WEIGHT_SHIFT = 20
+  PATTERN_WEIGHT_MASK = $FF
+  OFFSET_RANDOMIZE  = 6
+  OFFSET_RANDOMIZE2 = 7 &apos;also randomize direction
+
+  SPEED_SMOOTHING = 6
+  
+  
+  HEXAGON1_RADIUS_UNSCALED = 22 &apos; measured
+  HEXAGON1_RADIUS = HEXAGON1_RADIUS_UNSCALED * PRESCALE 
+  PLAYER_RADIUS_UNSCALED = 28 &apos; measured
+  PLAYER_RADIUS = PLAYER_RADIUS_UNSCALED * PRESCALE
+  PLAYER_RADIUS_WALLSPACE = $10000*(PLAYER_RADIUS_UNSCALED-HEXAGON1_RADIUS_UNSCALED)/WALL_UNIT_UNSCALED 
+  WALL_UNIT_UNSCALED = 16
+  WALL_UNIT = WALL_UNIT_UNSCALED * PRESCALE 
+  TEST1_RADIUS = 64 * PRESCALE
+
+  PLAYER_RADIUS_INNER = float(PLAYER_RADIUS_UNSCALED)*((^^3.0)/2.0)
+  WALLDRAW_RADIUS = trunc(^^((VIRTUAL_WIDTH*VIRTUAL_WIDTH+VIRTUAL_HEIGHT*VIRTUAL_HEIGHT)/4.0)-PLAYER_RADIUS_INNER+float(PLAYER_RADIUS_UNSCALED))&apos;200
+  WALLDRAW_MAX = WALLDRAW_RADIUS/WALL_UNIT_UNSCALED+2
+
+  WALLSPAWN_MAX = 15 &apos; should be larger than WALLDRAW_MAX to avoid pop-in
+   
+PRI clearwalls
+&apos;longfill(@sector_walls,WALL_PARKED,SECTORS*WALLBUFFER_SIZE)
+&apos;wall_phase := $D0000
+
+&apos;longfill(@walls_low,0,constant(SECTORS*2)) &apos; fill both walls_low and walls_high
+bytefill(@wallbitmap,0,WALLBUFFER_SIZE)
+wall_phase := 0
+wall_spawnpos := WALLSPAWN_MAX
+
+{PRI testwalls | i
+clearwalls
+repeat i from 0 to constant(WALLBUFFER_SIZE-1)
+  &apos;wallbitmap[i] |= ($99 &lt;&lt; (i&amp;1))&amp;$1F
+   wallbitmap[i] := $49249249 &gt;&gt; i
+
+}
+
+PRI try_spawn_pattern |i,tmp,wptr,offset,ccw,size
+
+&apos;pst.str(string(13,&quot;Attempting spawn... &quot;))
+&apos;pst.dec(wall_spawnpos)
+&apos;pst.char(&quot; &quot;)
+&apos;pst.hex(next_pattern,4)
+&apos;pst.char(&quot; &quot;)
+
+if wall_spawnpos =&gt; WALLSPAWN_MAX &apos; don&apos;t spawn too far ahead
+  return
+wptr := next_pattern&apos;&amp;PATTERN_PTR_MASK
+&apos;pst.str(string(&quot;okay... &quot;))
+if (size:=byte[wptr++]) + wall_spawnpos =&gt; WALLBUFFER_SIZE &apos; check if there are enough free slots
+  return
+&apos;pst.str(string(&quot;WE&apos;RE IN! &quot;))
+&apos; prepare
+offset := (next_pattern&gt;&gt;PATTERN_OFFSET_SHIFT)&amp;PATTERN_OFFSET_MASK
+ccw:=next_pattern &amp; PATTERN_CCW
+
+if offset =&gt; OFFSET_RANDOMIZE
+  if offset =&gt; OFFSET_RANDOMIZE2
+    if (random?)&amp;4
+      NOT ccw
+  offset := (random?&amp;posx)//SECTORS
+
+pst.dec(offset)
+
+if ccw &apos; Adjust offset for CCW so sector 0 stays sector 0
+  if (offset+=1) =&gt; SECTORS
+    offset:=0 
+  
+
+&apos;&apos; actually perform spawning
+repeat i from wall_spawnpos to wall_spawnpos+size-1
+  tmp := byte[wptr++]
+  if ccw
+    tmp &gt;&lt;= SECTORS
+  wallbitmap[i] := (tmp&lt;&lt;offset + tmp&gt;&gt;(SECTORS-offset))&amp;constant((|&lt;SECTORS)-1)
+
+wall_spawnpos += byte[wptr] &apos; spacing
+
+{pst.str(string(&quot;spacing: &quot;))
+pst.dec(byte[wptr])
+pst.newline }
+next_pattern~
+ 
+PRI select_pattern(pattern_list) : pat | i,weight
+
+&apos;&apos; sum total weight
+i~
+weight~
+repeat while pat:=long[pattern_list][i++]
+  weight+= (pat&gt;&gt;PATTERN_WEIGHT_SHIFT)&amp;PATTERN_WEIGHT_MASK
+
+weight := (random?&amp;posx) // weight
+
+i~
+repeat
+  pat:=long[pattern_list][i++]
+  if (weight -= (pat&gt;&gt;PATTERN_WEIGHT_SHIFT)&amp;PATTERN_WEIGHT_MASK)&lt;0
+    quit
+
+CON
+
+HUECALC_LEFTSAR = 16+3-4
+HUECALC_RIGHTSAR = HUECALC_LEFTSAR - 8 -1
+
+PRI huecalc(angl,swing,center) | tmp
+tmp := sin(angl)
+tmp += tmp~&gt;14
+&apos;result := ((tmp~+constant(14-4))&amp;$F0) + (((tmp+$10000)~&gt;constant(14-(4+8)))&amp;$F000)
+result := ((((tmp+$0000)*swing)~&gt;HUECALC_LEFTSAR) &amp; $F0) + ((((((tmp+$0000)*swing)~&gt;HUECALC_RIGHTSAR)+$800)~&gt;1) &amp; $F000)
+result += center
+result &amp;= $F0F0
+
+PRI update | i,j,tmp,tmp2,snes,sectorchange_flag,oldsector,clip_angle,huetmp,lkey,rkey,snes_trigger
+
+&apos;pst.str(string(&quot;update!&quot;,13))
+
+if plat#SNES_PLAYER1 =&gt;0
+  snes := SNES_Read_Gamepad
+else
+  snes~
+snes_trigger:=snes&amp;!snes_prev
+
+lkey := kb.keystate($C0) OR snes&amp;constant(SNES_LEFT|SNES_L)
+rkey := kb.keystate($C1) OR snes&amp;constant(SNES_RIGHT|SNES_R)
+
+random? &apos; RNG dummy tick
+
+{ &apos;&apos; Old code - ressurect this if you want to add pentagon/square playfield
+sector_angles[0]:=0 &apos; first sector is always zero to make life easier
+repeat i from 1 to constant(SECTORS-1)
+  sector_angles[i] := i*constant(8192/SECTORS)
+}
+
+center_x := constant(128&lt;&lt;16)
+center_y := constant(119&lt;&lt;16)
+view_scale_y:= constant( negx &gt;&gt; ((PRESCALE_SHL-1)) )
+
+{
+pst.str(string(&quot;Time: &quot;)) 
+pst.dec(game_timer/60)
+pst.char(&quot;:&quot;)  
+pst.dec(game_timer//60)
+pst.newline}
+
+time2dualstr(game_timer,@strbuf_frames) 
+              
+case state
+  PLAY:
+    
+    if state_timer == 1 &apos; safe to update strbuf_hi
+      update_strbuf_hi
+      sdda.play_sfx(sdda#SFX_BEGIN)
+     
+    if state_timer&lt;15
+      view_scale_y:=(view_scale_y ** (((15+1)-game_timer)*trunc(float(posx)/10.0*5.0/128.0))) &lt;&lt; 8
+    else
+      view_scale_y+=byte[subcodeptr]&lt;&lt;17
+
+    ifnot game_timer
+      player_angle:=constant((8192/(SECTORS*2))/3)
+
+    &apos;&apos; stage script interpreter
+    &apos;&apos; see explanation further down
+    repeat
+      case tmp2:=word[script_pc]
+        $0000..$1FFF: &apos;&apos; SCRIPT_SPIN
+          speed_target := (tmp2&lt;&lt;19)~&gt;19
+        $2000..$3FFF: &apos;&apos; SCRIPT_POS
+          playfield_rotation := tmp2&amp;8191
+        $4000..$FFEF: &apos;&apos; SCRIPT_WAIT
+          if script_timer &lt; tmp2-$4000
+            quit
+        $FFF0..$FFFF: &apos;&apos; special commands
+          tmp := word[script_pc+=2]
+          case tmp2&amp;$F
+            $0: &apos;&apos; SCRIPT_CMD_JMP
+              script_pc:=@@tmp-2
+              script_timer~
+            $1: &apos;&apos; SCRIPT_CMD_EFFSTAGE
+              effectivestage := tmp
+            $2: &apos;&apos; SCRIPT_CMD_PATTERNS
+              patternlist := @@tmp
+            $3: &apos;&apos; SCRIPT_CMD_WALLSPEED
+              wall_speed := tmp
+            $4: &apos;&apos; SCRIPT_CMD_PLAYERSPEED
+              player_speed := tmp
+            $5: &apos;&apos; SCRIPT_CMD_MUSIC
+              &apos;&apos; TODO: evaluate firstplay_flag
+              if tmp &lt;&gt; current_music
+                sdda.play_music(current_music:=tmp)
+      script_pc+=2
+    script_timer++
+     
+    &apos;&apos; find player&apos;s sector
+    player_sector~
+    repeat i from 0 to constant(SECTORS-1)
+       if sector_angles[i] =&lt; player_angle
+          player_sector := i
+     
+    &apos;&apos; move player
+    if lkey
+      player_angle -= player_speed
+    if rkey
+      player_angle += player_speed
+    player_angle&amp;=8191
+     
+    {
+    pst.str(string(&quot;before: &quot;))
+    pst.dec(player_sector)
+    pst.newline
+    }
+    &apos;&apos; check for sector change
+    sectorchange_flag~                            
+    oldsector := player_sector
+    if player_sector == 0 AND player_angle =&gt; sector_angles[constant(SECTORS-1)] &apos; special case
+        player_sector := constant(SECTORS-1)
+        clip_angle := 0
+        sectorchange_flag~~
+    elseif player_sector == constant(SECTORS-1) AND player_angle &lt; sector_angles[1] &apos; special case
+      player_sector := 0
+      clip_angle := 8191
+      sectorchange_flag~~
+    elseif player_sector &lt;&gt; 0 AND player_angle &lt; sector_angles[player_sector]
+      clip_angle:=sector_angles[player_sector]
+      player_sector--
+      sectorchange_flag~~
+    elseif player_sector &lt;&gt; constant(SECTORS-1) AND player_angle =&gt; sector_angles[player_sector+1]
+      player_sector++
+      clip_angle := sector_angles[player_sector]-1
+      sectorchange_flag~~ 
+    {
+    pst.str(string(&quot;after: &quot;))
+    pst.dec(player_sector)
+    pst.newline
+     
+    pst.str(string(&quot;flag: &quot;))
+    pst.dec(sectorchange_flag)
+    pst.newline
+    }
+    &apos;&apos; check for walls in new sector (to clip when moving sideways into a wall)
+    if sectorchange_flag
+      if wallbitmap[1] &amp; |&lt;player_sector
+        player_sector := oldsector
+        player_angle := clip_angle
+     
+      
+     
+     
+     
+     
+    &apos;&apos; Move walls closer and kill player
+    wall_phase -= wall_speed
+    if wall_phase &lt; 0
+      tmp:= ((-wall_phase)&gt;&gt;16) &lt;# constant(WALLBUFFER_SIZE-1)
+      bytemove(@wallbitmap,@wallbitmap+tmp,WALLBUFFER_SIZE-tmp)
+      bytefill(@wallbitmap+WALLBUFFER_SIZE-tmp,0,tmp)
+      wall_phase += tmp&lt;&lt;16
+      wall_spawnpos -= tmp
+      if CHEATZ &lt; 2
+        hitflag OR= wallbitmap[1] &amp; |&lt;player_sector
+
+    {
+    pst.str(string(&quot;phase: &quot;))
+    pst.hex(wall_phase,8)
+    pst.newline
+    pst.str(string(&quot;next: &quot;))
+    pst.hex(next_pattern,8)
+    pst.str(string(&quot;list: &quot;))
+    pst.hex(patternlist,4)
+    pst.newline
+    }
+    
+    &apos;patternlist := @whirlpool2_only&apos;&apos;DEBUG!
+     
+    &apos;&apos; select next pattern
+    if (NOT next_pattern) AND patternlist
+      next_pattern := @@0+select_pattern(patternlist)        
+     
+    &apos;&apos; try spawning next pattern
+    if next_pattern
+      try_spawn_pattern 
+
+    &apos;&apos; Handle timer-related SFX
+    if game_timer==stage_records[stage]+1 and game_timer&lt;&gt;1
+      sdda.play_sfx(sdda#SFX_EXCELLENT)
+    elseif tmp := time2level(game_timer)
+      if leveltimetbl.word[tmp] == game_timer
+        sdda.play_sfx(constant(sdda#SFX_LINE-1)+tmp)
+    
+    game_timer++
+  GAMEOVER:
+    ifnot state_timer
+      time2dualstr(stage_records[stage],@strbuf2_frames) &apos; write best time string
+      sdda.play_music(current_music:=-1)
+      sdda.play_sfx(sdda#SFX_GAMEOVER)
+    if state_timer =&gt; 60
+      view_scale_y:=(view_scale_y ** (((state_timer&lt;#constant(60+10))-56)*trunc(float(posx)/10.0*3.0/128.0))) &lt;&lt; 8
+      if state_timer &lt; constant(60+10)
+        wall_phase+=$8000
+        speed_target:= -GAMEOVER_SPIN
+    if state_timer == 69 &apos;nice
+      try_commit_record
+  LEVELSELECT:
+    firstplay_flag~~
+    center_y := constant(188&lt;&lt;16)
+    player_angle := -playfield_rotation+4096
+    view_scale_y&lt;&lt;=1
+    tmp:=constant(-8192/SECTORS)*stage + constant(8192/(SECTORS*2)*3)
+    ifnot state_timer
+      playfield_rotation:=tmp
+    speed_target:=((tmp-playfield_rotation)&lt;&lt;19)~&gt;19
+    if ||speed_target &lt; 64
+      if lkey
+        if stage-- == 0 &apos; Do this because stage is a byte
+          stage:=HYPER_HEXAGONEST
+      if rkey
+        if ++stage &gt; HYPER_HEXAGONEST
+          stage:=0
+      if lkey or rkey
+        sdda.play_sfx(sdda#SFX_CHOOSE)
+    if ||speed_target &lt; 11
+      speed_target:=playfield_speed:=0
+      playfield_rotation:=tmp
+    elseif speed_target &lt; 0 
+      speed_target:=-71
+    else
+      speed_target:=71
+    tmp := stage2effstage_tbl.byte[stage]
+    if is_current_locked
+      tmp := EFF_TITLE
+    effectivestage:=tmp
+  TITLE:
+    center_y := constant(238&lt;&lt;16)
+    view_scale_y&lt;&lt;=2
+    player_angle := -playfield_rotation &apos; moves player out of frame
+    speed_target := -20 &apos;&apos; TODO
+    effectivestage := EFF_TITLE
+    if state_timer==60
+      sdda.play_sfx(sdda#SFX_TITLE)
+    
+
+&apos;&apos; select colors
+&apos;effectivestage := EFF_HEXAGONER3 &apos;&apos;DEBUG!
+
+tmp:=@effstage_color_tbl+effectivestage&lt;&lt;3 &apos; calc table base address
+huetmp := word[tmp][3] &apos; get huecalc_center
+if huetmp&amp;$0100 &apos; colorswap flag? 
+  if ++colorswap_timer =&gt; 45 &apos; measured
+    colorswap_timer~
+    NOT playfield_colorswap
+else
+  playfield_colorswap:=colorswap_timer:=0 
+
+if tmp2:=(huetmp&amp;$F)
+  huetmp:= huecalc(framecount*huecalc_tbl.byte[tmp2&lt;&lt;1],huecalc_tbl.byte[tmp2&lt;&lt;1+1],huetmp&amp;$F0F0)
+else
+  huetmp:= (framecount&amp;$F0)+((framecount+$8)&amp;$F0)&lt;&lt;8 &apos;&apos; Taste the rainbow
+
+color1:=word[tmp][0]+huetmp
+color2:=word[tmp][1]+huetmp
+if NOT safe_colors AND effectivestage==EFF_HEXAGONER2
+  color3:=$8888^huetmp
+else
+  color3:=word[tmp][2]+huetmp
+    
+&apos;pst.hex(huetmp,8)
+    &apos;pst.newline
+
+
+
+if speed_target==SPINSPEED_BW_SPECIAL &apos; special case
+  playfield_speed := (((constant(-1*8192/2/SECTORS)-playfield_rotation)&amp;8191)+31)&gt;&gt;5
+else &apos;smooth out speed 
+  tmp:=speed_target-playfield_speed
+  if tmp&lt;0
+    playfield_speed += (tmp-constant(SPEED_SMOOTHING-1))/SPEED_SMOOTHING
+  elseif tmp&gt;0
+    playfield_speed += (tmp+constant(SPEED_SMOOTHING-1))/SPEED_SMOOTHING
+   
+playfield_rotation += playfield_speed
+
+state_timer++
+      
+   
+repeat while kb.gotkey OR snes_trigger
+  if snes_trigger
+    tmp~
+    case i:=(|&lt;((&gt;|snes_trigger)-1))
+      SNES_A: tmp:=&quot; &quot;
+      SNES_X: tmp:=&quot;n&quot;
+      SNES_Y: tmp:=&quot;b&quot;
+      SNES_SELECT: tmp:=$DC
+      SNES_START: tmp:= $CB    
+    
+    snes_trigger &amp;= !i     
+  else
+    tmp := kb.key
+  pst.dec(tmp)
+  pst.newline  
+  case tmp
+    $CB: &apos; Esc
+      if state==PLAY
+        hitflag~~
+      elseif state==GAMEOVER
+        try_commit_record
+        clearwalls
+        state_timer~
+        state:=LEVELSELECT
+        sdda.play_sfx(sdda#SFX_BACK)
+      elseif state==LEVELSELECT
+        state_timer~
+        state:=TITLE         
+        sdda.play_sfx(sdda#SFX_BACK)
+    &quot;t&quot;:
+      if CHEATZ
+        game_timer+= 60
+        script_timer += 60
+    &quot; &quot;: &apos; Space
+      if state==TITLE
+        state_timer~
+        state:=LEVELSELECT
+        sdda.play_sfx(sdda#SFX_SELECT)
+      elseif (state==GAMEOVER AND state_timer =&gt; 60) OR (state==LEVELSELECT and NOT is_current_locked)
+        try_commit_record
+        if stage == HEXAGON AND NOT is_locked(BLACKWHITE) AND lkey AND rkey
+          stage:=BLACKWHITE
+        clearwalls
+        game_timer~
+        state_timer~
+        script_timer~
+        script_pc := @@script_init_tbl.word[stage]
+        next_pattern~
+        state:=PLAY
+    $DC: &apos; printscreen
+      gfx.toggle_mode
+    $6C9: &apos;Ctrl-Alt-Del : Quit gracefully!
+      if state == GAMEOVER
+        try_commit_record
+      reboot
+    other: &apos;ignore
+   
+if hitflag~
+  state := GAMEOVER
+  state_timer~
+  commit_record_flag~~
+  gameover_newrecord_flag:= stage_records[stage] &lt; game_timer 
+
+  
+snes_prev:=snes
+
+PRI is_current_locked
+return is_locked(stage)
+
+PRI is_locked(which)
+ifnot CHEATZ
+  case which              
+    HYPER_HEXAGON..HYPER_HEXAGONEST:result:= stage_records[which-3] &lt; constant(60*60)
+    BLACKWHITE: result:= stage_records[HYPER_HEXAGONEST] &lt; constant(60*60)
+
+DAT
+org
+effstage_color_tbl word
+&apos;&apos;   color1 color2 color3 huecalc_center+colorswap flag
+word $0303, $0404, $0505, $0000 &apos; EFF_TITLE
+word $0A0A, $0B0B, $0D0D, $9091 &apos; EFF_HEXAGON1
+word $0A0A, $0B0B, $0D0D, $1021 &apos; EFF_HEXAGON2
+word $0A0A, $0B0B, $0D0D, $C0D1 &apos; EFF_HEXAGON3
+word $0202, $0B0B, $0E0E, $5162 &apos; EFF_HEXAGONER1
+word $0707, $0E0E, $0C0C, $D1D2 &apos; EFF_HEXAGONER2 (see special case color3 for NOT safe_colors)
+word $0B0B, $0D0D, $0707, $D1D2 &apos; EFF_HEXAGONER3
+word $0B0B, $0C0C, $0E0E, $0100 &apos; EFF_HEXAGONEST1
+word $0404, $0505, $0707, $0100 &apos; EFF_HEXAGONEST2
+word $0202, $0202, $0707, $0000 &apos; EFF_BLACKWHITE
+
+huecalc_tbl byte &apos;&apos; indexed by bottom bits of huecalc_center
+&apos;&apos;   speed,range
+byte  0, 0
+byte 35,10
+byte 20,20
+
+
+PRI try_commit_record
+
+if commit_record_flag~
+  stage_records[stage] #&gt;= game_timer
+  ifnot CHEATZ
+    sdda.writesavedata(@save_space)
+
+
+PRI draw
+
+if state_timer &lt; 5 &apos; Flash?
+  gl.triangle(constant((gfx#WIDTH/2)&lt;&lt;16),constant(-gfx#HEIGHT&lt;&lt;16),constant(-gfx#WIDTH&lt;&lt;16),constant(gfx#HEIGHT&lt;&lt;16),constant(2*gfx#WIDTH&lt;&lt;16),constant(gfx#HEIGHT&lt;&lt;16),$0707)
+else
+  draw_game
+  if state == PLAY OR (state == GAMEOVER AND state_timer &lt; 60) 
+    draw_hud
+  elseif state == GAMEOVER AND state_timer=&gt;70
+    draw_gameover
+  elseif state == LEVELSELECT
+    draw_levelselect
+  elseif state == TITLE
+    draw_title
+return 0 &apos; dont trigger ABORT handler
+
+PRI draw_game : view_scale_x |i,i2,j,tmp,rad,ibuf,wallactive,adjflag,tmp2,rscl1x,rscl1y,rscl2x,rscl2y&apos;,polybuf[SECTORS*2]
+
+view_scale_x := (view_scale_y ** PIXEL_ASPECT_FIX)&lt;&lt;1
+&apos;&apos; update/draw playfield
+repeat i from 0 to constant(SECTORS-1)
+  tmp:=  sector_angles[i]+playfield_rotation
+  sector_vx[i] := ((-sin(tmp))&lt;&lt;PRESCALE_SHL)**view_scale_x
+  sector_vy[i] := (sin(tmp+2048)&lt;&lt;PRESCALE_SHL)**view_scale_y
+ 
+&apos;&apos; background
+repeat i from 0 to constant(SECTORS-1)
+  if 0&apos;i==player_sector
+    tmp2:=$7D7D
+  elseif (playfield_colorswap^i)&amp;1
+    tmp2 := color1
+  else
+    tmp2 := color2
+  if (i2 := i+1) =&gt; SECTORS
+    i2 -= SECTORS    
+  gl.triangle(center_x,center_y,{
+  }center_x+sector_vx[i]*PLAYFIELD_RADIUS,center_y+sector_vy[i]*PLAYFIELD_RADIUS,{
+  }center_x+sector_vx[i2]*PLAYFIELD_RADIUS,center_y+sector_vy[i2]*PLAYFIELD_RADIUS,tmp2)
+ 
+ 
+&apos;&apos; central hexagon                   
+repeat i from 0 to constant(SECTORS-1)
+  polybuf[i&lt;&lt;1] := center_x + sector_vx[i]*HEXAGON1_RADIUS_UNSCALED
+  polybuf[i&lt;&lt;1+1] := center_y + sector_vy[i]*HEXAGON1_RADIUS_UNSCALED
+gl.polygon(@polybuf,SECTORS,color1)
+gl.line_polygon(@polybuf,SECTORS,color3)
+ 
+&apos;&apos; walls
+wallactive~
+repeat j from WALLDRAW_MAX to -1
+  tmp2:=wallbitmap[j]
+  if (tmp := ((j)&lt;&lt;16)+wall_phase+PLAYER_RADIUS_WALLSPACE) &lt; -$0_0000
+    tmp2~
+  ifnot (tmp2)^wallactive
+    next
+  rad:=HEXAGON1_RADIUS_UNSCALED + (tmp*WALL_UNIT_UNSCALED) ~&gt;constant(16)
+  adjflag~
+  repeat i from 0 to constant(SECTORS-1)
+    if (i2 := i+1) =&gt; SECTORS
+        i2 -= SECTORS
+    ibuf := @polybuf+i&lt;&lt;5      
+    if tmp2 &amp; |&lt;i AND NOT (wallactive &amp; |&lt;i) &apos; wall starts, generate outer vertices
+      
+      &apos; outer 1
+      if adjflag
+        longmove(ibuf,adjflag,2)
+      else
+        long[ibuf][0] := center_x + sector_vx[i]*rad
+        long[ibuf][1] := center_y + sector_vy[i]*rad
+       
+      &apos; outer 2
+      long[ibuf][2] := center_x + sector_vx[i2]*rad
+      long[ibuf][3] := center_y + sector_vy[i2]*rad
+      adjflag:=ibuf+constant(2*4)
+    elseif !tmp2 &amp; |&lt;i AND (wallactive &amp; |&lt;i) &apos;wall ends, generate inner vertices and submit
+      &apos; inner vertices&apos; X
+      if adjflag
+        longmove(ibuf+constant(6*4),adjflag,2)
+      else
+        long[ibuf][6] := center_x + sector_vx[i]* (rad#&gt;HEXAGON1_RADIUS_UNSCALED)
+      long[ibuf][4] := center_x + sector_vx[i2]*(rad#&gt;HEXAGON1_RADIUS_UNSCALED)
+       
+      if (long[ibuf][6]#&gt;long[ibuf][4]) &lt; 0
+        &apos;pst.str(string(&quot;skip 1&quot;,13))
+        adjflag~
+        next &apos; perform X clipping because the GL doesn&apos;t, lol
+      if (long[ibuf][6]&lt;#long[ibuf][4]) =&gt; constant(gfx#WIDTH&lt;&lt;16)
+        &apos;pst.str(string(&quot;skip 2&quot;,13))
+        adjflag~
+        next &apos; perform X clipping because the GL doesn&apos;t, lol
+      &apos; inner vertices&apos; Y
+      ifnot adjflag                                 
+        long[ibuf][7] := center_y + sector_vy[i]* (rad#&gt;HEXAGON1_RADIUS_UNSCALED)
+      long[ibuf][5] := center_y + sector_vy[i2]*(rad#&gt;HEXAGON1_RADIUS_UNSCALED)
+      {pst.str(string(&quot;submitting poly... &quot;))
+      pst.dec(j)
+      pst.char(&quot; &quot;)
+      pst.dec(i)
+      pst.char(&quot; &quot;)
+      pst.dec(ibuf - @polybuf)
+      pst.newline}         
+      gl.polygon(ibuf,4,color3)
+      adjflag:= ibuf+constant(4*4)
+    else
+      adjflag~
+  wallactive:=tmp2
+
+ 
+&apos;&apos;player
+tmp :=  (-sin(player_angle+playfield_rotation) &lt;&lt; PRESCALE_SHL)**view_scale_x
+tmp2 := (sin(player_angle+playfield_rotation+2048) &lt;&lt; PRESCALE_SHL)**view_scale_y        
+rscl1x := tmp*constant(PLAYER_RADIUS_UNSCALED-4)
+rscl1y := tmp2*constant(PLAYER_RADIUS_UNSCALED-4)
+rscl2x := tmp2*3
+rscl2y := tmp*3                                             
+gl.triangle(center_x + (tmp*PLAYER_RADIUS_UNSCALED),center_y + (tmp2*PLAYER_RADIUS_UNSCALED),{
+           }center_x + rscl1x + rscl2x ,{            
+           }center_y + rscl1y - rscl2y ,{
+           }center_x + rscl1x - rscl2x ,{            
+           }center_y + rscl1y + rscl2y ,color3)
+
+PRI draw_hud : lev | tmp,tmp2,ttx,barleft,barright,blink 
+&apos;&apos; HUD
+if game_timer=&gt;constant(100*60)
+  tmp:=constant(4*8)
+  ttx:=constant(142-18)
+else
+  tmp:=0
+  ttx:=142
+gl.polygon(@hud_topright_poly1+tmp,4,$0202)
+gl.polygon(@hud_topright_poly2+tmp,4,$0202)
+gl.polygon(@hud_topleft_poly,4,$0202)
+ 
+gl.text_inline(224,constant(4+8),0,0,@strbuf_frames,fontptr,$0707)                                 
+gl.text_inline(174,4,1,1,@strbuf_secs,fontptr,$0707)
+
+tmp := string(&quot; TIME&quot;) 
+if stage =&gt; HYPER_HEXAGON
+  tmp := @hyper_str
+
+gl.text(ttx,4,0,0,tmp,fontptr,$0707) 
+
+blink~
+
+if (barright:=stage_records[stage]) =&gt; {1&apos;}constant(60*60)
+  barleft:=0
+  tmp:=@strbuf_hi
+  if (blink:=barright - game_timer) &lt; 0
+    tmp:=@record_str
+                              
+else 
+  lev := time2level(game_timer)
+  barleft:=leveltimetbl.word[lev]
+  barright:=leveltimetbl.word[lev+1]
+  if lev
+    blink:=barleft-game_timer
+  else
+    blink:=1
+  tmp:=@@levelstringtbl.word[lev]
+&apos;gl.text(10,4,0,0,tmp,fontptr,$0707)
+if state_timer&amp;8 AND (blink &gt; -45 AND blink =&lt; 0)
+  tmp2:=$0505
+else
+  tmp2:=$0707
+gl.text_centered(46,4,0,0,tmp,fontptr,tmp2)
+  
+  
+
+if barright
+  tmp := constant(10&lt;&lt;16)+(((game_timer-barleft)&lt;&lt;16)/(barright-barleft) &lt;# $1_0000)*71
+  gl.line(constant(10&lt;&lt;16),constant(14&lt;&lt;16),tmp,constant(14&lt;&lt;16),color3)
+  gl.line(tmp,constant(14&lt;&lt;16),constant(81&lt;&lt;16),constant(14&lt;&lt;16),color2) 
+else        
+  gl.line(constant(10&lt;&lt;16),constant(14&lt;&lt;16),constant(81&lt;&lt;16),constant(14&lt;&lt;16),color3)
+
+DAT
+org
+hud_topright_poly1
+long 133&lt;&lt;16, -1&lt;&lt;16
+long 260&lt;&lt;16, -1&lt;&lt;16 
+long 260&lt;&lt;16, 15&lt;&lt;16
+long 141&lt;&lt;16, 15&lt;&lt;16
+hud_topright_poly1_big
+long 115&lt;&lt;16, -1&lt;&lt;16
+long 260&lt;&lt;16, -1&lt;&lt;16 
+long 260&lt;&lt;16, 15&lt;&lt;16
+long 123&lt;&lt;16, 15&lt;&lt;16
+
+hud_topright_poly2
+long 185&lt;&lt;16, 15&lt;&lt;16
+long 260&lt;&lt;16, 15&lt;&lt;16  
+long 260&lt;&lt;16, 23&lt;&lt;16
+long 189&lt;&lt;16, 23&lt;&lt;16
+hud_topright_poly2_big
+long 167&lt;&lt;16, 15&lt;&lt;16
+long 260&lt;&lt;16, 15&lt;&lt;16  
+long 260&lt;&lt;16, 23&lt;&lt;16
+long 171&lt;&lt;16, 23&lt;&lt;16
+       
+hud_topleft_poly
+long  96&lt;&lt;16, -5&lt;&lt;16
+long  -4&lt;&lt;16, -5&lt;&lt;16   
+long  -4&lt;&lt;16, 15&lt;&lt;16
+long  86&lt;&lt;16, 15&lt;&lt;16
+
+PRI draw_gameover | lev,i,delta,angl,tmp,tmp2,fonttmp
+fonttmp:=fontptr
+gl.polygon(@gameover_last_poly1,4,$0202)
+gl.polygon(@gameover_last_poly2,4,$0202)         
+gl.text(116, 75,0,0,string(&quot;LAST&quot;),fonttmp,$0707)
+
+gl.text_inline(224,constant(76+8),0,0,@strbuf_frames,fonttmp,$0707)                                 
+gl.text_inline(172,76,1,1,@strbuf_secs,fonttmp,$0707)  
+gl.polygon(@gameover_best_poly1,4,$0202)  
+if gameover_newrecord_flag
+  gl.text(138,125,0,0,@new_record_str,fonttmp,$0707)
+else
+  gl.polygon(@gameover_best_poly2,4,$0202)
+  gl.text(129,125,0,0,string(&quot;BEST&quot;),fonttmp,$0707)
+  gl.text(224,constant(126+8),0,0,@strbuf2_frames,fonttmp,$0707)                                 
+  gl.text(172,126,1,1,@strbuf2_secs,fonttmp,$0707)
+
+gl.polygon(@gameover_big_poly,4,$0202)      
+lev := time2level(stage_records[stage])
+tmp:=string(&quot;LEVEL N&quot;)
+byte[tmp][6] := &quot;1&quot;+lev
+gl.text_inline( 13, 75,0,0,tmp,fonttmp,$0707)
+gl.text_ljust( 85, 84,0,0,@@levelstringtbl.word[lev],fonttmp,$0707)
+
+&apos;&apos; draw regular polygon, lol
+
+if lev &lt;&gt; 0
+  tmp:=lev
+  tmp2:=GAMEOVER_POLY_RADIUS
+  angl:=playfield_rotation
+else
+  tmp:=3
+  tmp2:=1
+  angl:=0
+delta:=8192/(tmp+1)
+repeat i from 0 to tmp
+  polybuf[i&lt;&lt;1]   := GAMEOVER_POLY_X+((-sin(angl)*tmp2)&lt;&lt;1)**PIXEL_ASPECT_FIX
+  polybuf[i&lt;&lt;1+1] := GAMEOVER_POLY_Y+(sin(angl+2048)*tmp2)
+  angl+=delta
+     
+gl.line_polygon(@polybuf,tmp+1,color3) 
+
+CON
+
+GAMEOVER_POLY_X = 54&lt;&lt;16
+GAMEOVER_POLY_Y = 118&lt;&lt;16
+GAMEOVER_POLY_RADIUS = 24
+
+DAT
+org
+gameover_best_poly1 long
+long 121&lt;&lt;16,121&lt;&lt;16
+long 260&lt;&lt;16,121&lt;&lt;16 
+long 260&lt;&lt;16,137&lt;&lt;16
+long 129&lt;&lt;16,137&lt;&lt;16
+
+gameover_best_poly2 long
+long 167&lt;&lt;16,137&lt;&lt;16
+long 260&lt;&lt;16,137&lt;&lt;16  
+long 260&lt;&lt;16,145&lt;&lt;16
+long 171&lt;&lt;16,145&lt;&lt;16
+
+gameover_last_poly1 long
+long 106&lt;&lt;16, 71&lt;&lt;16
+long 260&lt;&lt;16, 71&lt;&lt;16 
+long 260&lt;&lt;16, 87&lt;&lt;16
+long 114&lt;&lt;16, 87&lt;&lt;16
+
+gameover_last_poly2 long
+long 167&lt;&lt;16, 87&lt;&lt;16
+long 260&lt;&lt;16, 87&lt;&lt;16  
+long 260&lt;&lt;16, 95&lt;&lt;16
+long 171&lt;&lt;16, 95&lt;&lt;16
+
+gameover_big_poly long
+long  82&lt;&lt;16, 71&lt;&lt;16
+long  -4&lt;&lt;16, 71&lt;&lt;16
+long  -4&lt;&lt;16,145&lt;&lt;16
+long 119&lt;&lt;16,145&lt;&lt;16
+
+PRI draw_levelselect | fonttmp,stn,locked
+fonttmp:=fontptr
+if locked:=is_current_locked
+  stn := string(&quot;LOCKED&quot;)  
+else
+  stn := @@stagestringtbl.word[stage]
+gl.polygon(@levelselect_poly,4,$0202)
+gl.text_centered(128,42,1,1,stn,fonttmp,color3)
+ifnot locked
+  if stage =&gt; HYPER_HEXAGON
+    gl.polygon(@levelselect_poly_hyper,4,$0202)
+    gl.text(200,31,0,0,@hyper_str,fonttmp,color3)
+   
+  gl.text(10,60,0,0,string(&quot;DIFFICULTY:&quot;),fonttmp,$0505)
+  gl.text(constant(10+12*9),60,0,0,@@stagedifficultytbl.word[stage],fonttmp,$0707)
+  update_strbuf_hi
+  gl.text(10,69,0,0,string(&quot;BEST TIME:&quot;),fonttmp,$0505)
+  gl.text_inline(constant(10+12*9),69,0,0,@strbuf_hi,fonttmp,$0707)
+   
+DAT
+org
+levelselect_poly long
+long  -4&lt;&lt;16, 37&lt;&lt;16
+long 260&lt;&lt;16, 37&lt;&lt;16 
+long 260&lt;&lt;16,101&lt;&lt;16
+long  -4&lt;&lt;16,101&lt;&lt;16
+
+levelselect_poly_hyper long
+long 186&lt;&lt;16, 29&lt;&lt;16
+long 260&lt;&lt;16, 29&lt;&lt;16 
+long 260&lt;&lt;16, 37&lt;&lt;16
+long 190&lt;&lt;16, 37&lt;&lt;16
+
+CON
+LOGO_X = 52
+LOGO_Y = 64
+PRI draw_title | fonttmp
+fonttmp:=fontptr
+gl.text(LOGO_X,LOGO_Y,2,2,string(&quot;SPIN&quot;),fonttmp,$0707)
+gl.text(constant(LOGO_X+28),constant(LOGO_Y+34),1,1,string(&quot;HEXAGON&quot;),fonttmp,$0707)
+gl.text(12,216,0,0,string(&quot;V1.0 RC4&quot;),fonttmp,$0707) 
+
+PUB sin(angle) : s | c,z
+              &apos;angle: 0..8192 = 360&deg;
+  s := angle
+  if angle &amp; $800
+    s := -s
+  s |= $E000&gt;&gt;1
+  s &lt;&lt;= 1
+  s := word[s]
+  if angle &amp; $1000
+    s := -s                    &apos; return sin = -$FFFF..+$FFFF 
+
+PRI update_strbuf_hi | tmp,tmp2,spaces
+spaces:=2
+tmp2:=stage_records[stage]
+tmp := tmp2//60
+tmp2:= tmp2/60
+strbuf_hi[4] := &quot;:&quot;
+strbuf_hi[5] := &quot;0&quot;+tmp/10
+strbuf_hi[6] := &quot;0&quot;+tmp//10
+if tmp2 =&gt; 100 &apos; WTF?
+  spaces:=1
+  if tmp2 =&gt; 1000
+    spaces:=0
+    strbuf_hi[0] := &quot;0&quot;+tmp2/1000
+    tmp2//=1000 
+  strbuf_hi[1] := &quot;0&quot;+tmp2/100
+  tmp2//=100 
+strbuf_hi[2] := &quot;0&quot;+tmp2/10
+strbuf_hi[3] := &quot;0&quot;+tmp2//10
+strbuf_hi[7] := 0
+bytemove(@strbuf_hi,@strbuf_hi+spaces,8-spaces)
+
+PRI time2dualstr(time,bufptr) | frames,seconds
+seconds:= time/60
+frames := time//60
+byte[bufptr][0] := &quot;:&quot;
+byte[bufptr][1] := &quot;0&quot;+frames/10
+byte[bufptr][2] := &quot;0&quot;+frames//10
+byte[bufptr][3] := 0
+ 
+if seconds &gt; 99 
+  byte[bufptr][4] := &quot;0&quot;+((seconds/100)&lt;#9)
+  seconds//=100
+else
+  byte[bufptr][4] := &quot; &quot;
+byte[bufptr][5] := &quot;0&quot;+seconds/10
+byte[bufptr][6] := &quot;0&quot;+seconds//10 
+byte[bufptr][7] := 0 
+
+PRI time2level(frames) | tmp
+tmp:=frames
+if (tmp-=constant(10*60)) &lt; 0
+  return 0   
+elseif (tmp-=constant(10*60)) &lt; 0
+  return 1       
+elseif (tmp-=constant(10*60)) &lt; 0
+  return 2      
+elseif (tmp-=constant(15*60)) &lt; 0
+  return 3        
+elseif (tmp-=constant(15*60)) &lt; 0
+  return 4
+else
+  return 5     
+
+
+DAT
+org
+
+point_str    byte &quot;POINT&quot;,0
+line_str     byte &quot;LINE&quot;,0
+triangle_str byte &quot;TRIANGLE&quot;,0
+square_str   byte &quot;SQUARE&quot;,0
+pentagon_str byte &quot;PENTAGON&quot;,0
+blackwhite_str byte &quot;FINAL &quot;
+hexagon_str  byte &quot;HEXAGON&quot;,0
+hexagoner_str  byte &quot;HEXAGONER&quot;,0
+hexagonest_str  byte &quot;HEXAGONEST&quot;,0
+
+hard_str byte &quot;HARD&quot;,0
+harder_str byte &quot;HARDER&quot;,0
+hardest_str byte &quot;HARDEST&quot;,0
+hardester_str byte &quot;HARDESTER&quot;,0
+hardestest_str byte &quot;HARDESTEST&quot;,0
+hardestestest_str byte &quot;HARDESTESTEST&quot;,0
+
+CON
 {{
+Script format:
+word $XXXX where X is $0000..$1FFF : set spin speed to X (sign-extended)
+word $XXXX where X is $2000..$3FFF : set spin position to X&amp;8191
+word $XXXX where X is $4000..$FFEF : wait until script_timer =&gt; (X-$4000)
+word $FFFX : special command X
 
-  Terms of Use: MIT License 
+special command 0: clear script_timer and jump to X
+word @X
 
-  Permission is hereby granted, free of charge, to any person obtaining a copy
-  of this software and associated documentation files (the "Software"), to deal
-  in the Software without restriction, including without limitation the rights
-  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-  copies of the Software, and to permit persons to whom the Software is
-  furnished to do so, subject to the following conditions:
+special command 1: set effectivestage X
+word X
 
-  The above copyright notice and this permission notice shall be included in all
-  copies or substantial portions of the Software.
+special command 2: set pattern list X
+word @X
 
-  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-  SOFTWARE.
+special command 3: set wall speed
+word X
+
+special command 4: set player speed
+word X
+
+special command 5: set music
+word sdda#MUSIC_X
 
 }}
+SCRIPT_SPIN = $0000
+SCRIPT_SPINMASK = $1FFF
+SCRIPT_POS  = $2000
+SCRIPT_POSMASK  = $1FFF &apos; 8191
+SCRIPT_WAIT = $4000
+SCRIPT_CMD_JMP = $FFF0
+SCRIPT_CMD_EFFSTAGE = $FFF1
+SCRIPT_CMD_PATTERNS = $FFF2
+SCRIPT_CMD_WALLSPEED = $FFF3
+SCRIPT_CMD_PLAYERSPEED = $FFF4
+SCRIPT_CMD_MUSIC = $FFF5
+
+SPINSPEED_BW_SPECIAL = -4096
+
+PLAYERSPEED_NORMAL = 8192/(SECTORS*8) &apos; measured
+PLAYERSPEED_FAST   = 8192/(SECTORS*6) &apos; measured
+
+SECTOR_ANGLE_F = 8192.0 / float(SECTORS)
+
+GAMEOVER_SPIN = round(SECTOR_ANGLE_F/60.0)                     
+
+HEXAGON_SPIN_SLOW = round(SECTOR_ANGLE_F/60.0)
+HEXAGON_SPIN = round(SECTOR_ANGLE_F/30.0)
+
+HYPER_HEXAGON_SPIN = round(SECTOR_ANGLE_F/20.0)
+
+HEXAGONER_SPIN_SLOW = round(SECTOR_ANGLE_F/60.0)
+HEXAGONER_SPIN = round(SECTOR_ANGLE_F/30.0)
+
+HYPER_HEXAGONER_SPIN = round(SECTOR_ANGLE_F/20.0)
+
+HEXAGONEST_SPIN_SLOW = round(SECTOR_ANGLE_F/30.0)
+HEXAGONEST_SPIN = round(SECTOR_ANGLE_F/20.0)
+HEXAGONEST_SPIN_FAST = round(SECTOR_ANGLE_F/8.0)
+
+HYPER_HEXAGONEST_SPIN_SLOW = round(SECTOR_ANGLE_F/20.0)
+HYPER_HEXAGONEST_SPIN = round(SECTOR_ANGLE_F/15.0)
+
+
+DAT
+org
+script_init_tbl word
+word @script_hexagon &apos; Hexagon
+word @script_hexagoner &apos; Hexagoner
+word @script_hexagonest &apos; Hexagonest
+word @script_hyper_hexagon &apos; Hyper Hexagon
+word @script_hyper_hexagoner &apos; Hyper Hexagoner
+word @script_hyper_hexagonest &apos; Hyper Hexagonest
+word @script_blackwhite &apos; BW
+
+
+script_hexagon
+word SCRIPT_CMD_EFFSTAGE, EFF_HEXAGON1
+word SCRIPT_CMD_MUSIC, sdda#MUSIC_COURTESY
+word SCRIPT_CMD_PATTERNS, @hexagon_patterns_simple
+word SCRIPT_CMD_WALLSPEED, $1B00 &apos;assumption?
+word SCRIPT_CMD_PLAYERSPEED, PLAYERSPEED_NORMAL
+word SCRIPT_SPIN+( +HEXAGON_SPIN_SLOW &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*7+30 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGON_SPIN_SLOW &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*10 &apos; Exact
+word SCRIPT_SPIN+( +HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+word SCRIPT_CMD_PATTERNS, @hexagon_patterns
+
+word SCRIPT_WAIT+60*15+12 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*24+30 &apos; Exact?
+word SCRIPT_SPIN+( +HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*33+00 &apos; Exact
+word SCRIPT_SPIN+( -HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*41+24 &apos; Rough
+word SCRIPT_SPIN+( +HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*48+24 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGON_SPIN&amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*53+53 &apos; Rough
+word SCRIPT_SPIN+( +HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+
+word SCRIPT_WAIT+60*60
+word SCRIPT_CMD_JMP, @script_hyper_hexagon
+
+
+
+script_hyper_hexagon
+word SCRIPT_CMD_EFFSTAGE, EFF_HEXAGON2
+word SCRIPT_CMD_MUSIC, sdda#MUSIC_COURTESY
+word SCRIPT_CMD_PATTERNS, @hyper_hexagon_patterns
+word SCRIPT_CMD_WALLSPEED, $2200 &apos;assumption?
+word SCRIPT_CMD_PLAYERSPEED, PLAYERSPEED_NORMAL
+word SCRIPT_SPIN+( +HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*1+35 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*9+15 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*14+15 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*18+05 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*22+30 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*27+00 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*33+30 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*39+30 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*44+15 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*49+55 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*57+33 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*60
+word SCRIPT_CMD_EFFSTAGE, EFF_HEXAGON3
+
+word SCRIPT_WAIT+60*64+07 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*68+57 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*72+48 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*79+20 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*85+20 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*91+32 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*96+16 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*101+00 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*105+23 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*111+44 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*117+00 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*118+00 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*119+00 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGON_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*120
+word SCRIPT_CMD_JMP, @script_hyper_hexagoner
+
+
+
+script_hexagoner
+word SCRIPT_CMD_EFFSTAGE, EFF_HEXAGONER1   
+word SCRIPT_CMD_MUSIC, sdda#MUSIC_OTIS
+word SCRIPT_CMD_PATTERNS, @hexagoner_patterns
+word SCRIPT_CMD_WALLSPEED, $2000 &apos;assumption?
+word SCRIPT_CMD_PLAYERSPEED, PLAYERSPEED_NORMAL
+word SCRIPT_SPIN+( +HEXAGONER_SPIN_SLOW &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*9+30 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGONER_SPIN_SLOW &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*12+10 &apos; Rough
+word SCRIPT_SPIN+( +HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*21+15 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*26+06 &apos; Rough
+word SCRIPT_SPIN+( +HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*34+53 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*38+40 &apos; Rough
+word SCRIPT_SPIN+( +HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*44+45 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*49+15 &apos; Rough
+word SCRIPT_SPIN+( +HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*58+43 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*60
+word SCRIPT_CMD_JMP, @script_hyper_hexagoner
+
+script_hyper_hexagoner
+word SCRIPT_CMD_EFFSTAGE, EFF_HEXAGONER2      
+word SCRIPT_CMD_MUSIC, sdda#MUSIC_OTIS
+word SCRIPT_CMD_PATTERNS, @hyper_hexagoner_patterns
+word SCRIPT_CMD_WALLSPEED, $2400 &apos;assumption?
+word SCRIPT_CMD_PLAYERSPEED, PLAYERSPEED_NORMAL
+word SCRIPT_SPIN+( -HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*01+36 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*04+00 &apos; Manual
+word SCRIPT_SPIN+( -HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*08+03 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*13+20 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*18+20 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*23+39 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*28+53 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*35+32 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*45+05 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*53+00 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*60
+word SCRIPT_CMD_EFFSTAGE, EFF_HEXAGONER3
+
+word SCRIPT_WAIT+60*62+35 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*70+51 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*78+55 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*83+57 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+                     
+word SCRIPT_WAIT+60*91+00 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*96+25 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*103+16 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*109+31 &apos; Rough
+word SCRIPT_SPIN+( -HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*119+00 &apos; Rough
+word SCRIPT_SPIN+( +HYPER_HEXAGONER_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*120
+word SCRIPT_CMD_JMP, @script_hyper_hexagonest
+
+
+
+script_hexagonest
+word SCRIPT_CMD_EFFSTAGE, EFF_HEXAGONEST1      
+word SCRIPT_CMD_MUSIC, sdda#MUSIC_FOCUS
+word SCRIPT_CMD_PATTERNS, @hexagonest_patterns
+word SCRIPT_CMD_WALLSPEED, $2666 &apos;assumption?
+word SCRIPT_CMD_PLAYERSPEED, PLAYERSPEED_FAST
+word SCRIPT_SPIN+( +HEXAGONEST_SPIN_SLOW &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*05+11 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGONEST_SPIN_SLOW &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*06+50 &apos; Rough
+word SCRIPT_SPIN+( +HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*10+30 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*10+45 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGONEST_SPIN_FAST &amp;SCRIPT_SPINMASK)
+word SCRIPT_WAIT+60*11+15 &apos; Rough
+word SCRIPT_SPIN+( 0 &amp;SCRIPT_SPINMASK)
+word SCRIPT_WAIT+60*11+25 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*15+25 &apos; Rough
+word SCRIPT_SPIN+( +HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*19+00 &apos; Exact
+word SCRIPT_SPIN+( -HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*24+00 &apos; Exact
+word SCRIPT_SPIN+( +HEXAGONEST_SPIN_FAST &amp;SCRIPT_SPINMASK)
+word SCRIPT_WAIT+60*24+40 &apos; Rough
+word SCRIPT_SPIN+( 0 &amp;SCRIPT_SPINMASK)
+word SCRIPT_WAIT+60*24+50 &apos; Rough
+word SCRIPT_SPIN+( +HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*29+50 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*37+45 &apos; Rough
+word SCRIPT_SPIN+( +HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*42+53 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*46+30 &apos; Exact
+word SCRIPT_SPIN+( +HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*53+21 &apos; Rough
+word SCRIPT_SPIN+( -HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*56+00 &apos; Exact
+word SCRIPT_SPIN+( -HEXAGONEST_SPIN_FAST &amp;SCRIPT_SPINMASK)
+word SCRIPT_WAIT+60*56+40 &apos; Rough
+word SCRIPT_SPIN+( 0 &amp;SCRIPT_SPINMASK)
+word SCRIPT_WAIT+60*56+50 &apos; Rough
+word SCRIPT_SPIN+( +HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*60
+word SCRIPT_CMD_JMP, @script_hyper_hexagonest
+
+
+
+script_hyper_hexagonest
+word SCRIPT_CMD_EFFSTAGE, EFF_HEXAGONEST2    
+word SCRIPT_CMD_MUSIC, sdda#MUSIC_FOCUS
+word SCRIPT_CMD_PATTERNS, @hyper_hexagonest_patterns
+word SCRIPT_CMD_WALLSPEED, $2B00 &apos;assumption?
+word SCRIPT_CMD_PLAYERSPEED, PLAYERSPEED_FAST
+word SCRIPT_SPIN+( +HYPER_HEXAGONEST_SPIN_SLOW &amp;SCRIPT_SPINMASK) &apos;&apos; TODO
+
+word SCRIPT_WAIT+60*04+00 &apos; Manual
+word SCRIPT_SPIN+( +HYPER_HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*08+20 &apos; Manual
+word SCRIPT_SPIN+( -HYPER_HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*12+50 &apos; Manual
+word SCRIPT_SPIN+( +HYPER_HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*17+30 &apos; Manual
+word SCRIPT_SPIN+( -HYPER_HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*21+40 &apos; Manual
+word SCRIPT_SPIN+( +HYPER_HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*27+30 &apos; Manual
+word SCRIPT_SPIN+( -HYPER_HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*34+40 &apos; Manual
+word SCRIPT_SPIN+( +HYPER_HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*41+30 &apos; Manual
+word SCRIPT_SPIN+( -HYPER_HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*45+40 &apos; Manual
+word SCRIPT_SPIN+( +HYPER_HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*50+50 &apos; Manual
+word SCRIPT_SPIN+( -HYPER_HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*56+20 &apos; Manual
+word SCRIPT_SPIN+( +HYPER_HEXAGONEST_SPIN &amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*60
+word SCRIPT_CMD_JMP, @script_blackwhite
+
+
+
+script_blackwhite
+word SCRIPT_CMD_EFFSTAGE, EFF_BLACKWHITE        
+word SCRIPT_CMD_MUSIC, sdda#MUSIC_BLACKWHITE
+word SCRIPT_CMD_PATTERNS, @blackwhite_patterns
+word SCRIPT_CMD_WALLSPEED, $2B00 &apos;assumption?
+word SCRIPT_CMD_PLAYERSPEED, PLAYERSPEED_FAST
+word SCRIPT_SPIN+(SPINSPEED_BW_SPECIAL&amp;SCRIPT_SPINMASK)
+
+word SCRIPT_WAIT+60*10
+word SCRIPT_POS+( -1 &amp; SCRIPT_POSMASK)
+word SCRIPT_CMD_JMP, @script_blackwhite
+ 
+
+script_idle
+word SCRIPT_WAIT+1
+word SCRIPT_CMD_JMP, @script_idle
+
+
+
+DAT
+long
+          {
+long @pattern_solo1     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 10&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_triplec   +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 5&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+long @pattern_solo2     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 8&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2_opp +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 8&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+long @pattern_solo3     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 7&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_solo3_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 6&lt;&lt;PATTERN_WEIGHT_SHIFT
+ 
+long @pattern_solo4     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 8&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+long @pattern_multic    +PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_rain      +PATTERN_CW  + 0                &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT 
+
+long @pattern_whirlpool +PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_whirlpool2+PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 22&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+long @pattern_2spin     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT &apos;}
+&apos;long @pattern_3spin    +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+&apos;long @pattern_4spin    +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+                                                                                                          {
+long @pattern_321       +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_bat       +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_ladder    +PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT &apos;}
+&apos;long @pattern_stair1   +PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+&apos;long @pattern_stair2   +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+&apos;}
+
+whirlpool2_only
+long @pattern_whirlpool2+PATTERN_CW  + 0&lt;&lt;PATTERN_OFFSET_SHIFT                  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+&apos;long @pattern_2spin +PATTERN_CCW + 0 &lt;&lt;PATTERN_OFFSET_SHIFT                      + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long 0
+
+hexagon_patterns
+long @pattern_whirlpool +PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_bat       +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_ladder    +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+hexagon_patterns_simple 
+long @pattern_solo1     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 10&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_triplec   +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 6&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 8&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2_opp +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 5&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo3     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 7&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_solo3_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 5&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo3_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_solo4     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long 0 
+
+hyper_hexagon_patterns
+long @pattern_solo1     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 10&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_triplec   +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 6&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 8&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2_opp +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 8&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo3     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 5&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_solo3_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 5&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo3_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+long @pattern_whirlpool +PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_bat       +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_ladder    +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_stair1   +PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_321      +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long 0
+
+hexagoner_patterns
+long @pattern_solo1     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 9&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_triplec   +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 5&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 8&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2_opp +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 5&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo3     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 5&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_solo3_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo3_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_solo4     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 8&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+long @pattern_2spin     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_4spin     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_multic    +PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_rain      +PATTERN_CW  + 0                &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_bat       +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_ladder    +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_321       +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long 0
+
+hyper_hexagoner_patterns   
+long @pattern_solo1     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  +10&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_triplec   +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 6&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 5&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2_opp +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo3     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_solo3_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 6&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo3_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_solo4     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 8&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT     
+
+long @pattern_whirlpool2+PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_3spin     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_rain      +PATTERN_CW  + 0                &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_bat       +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_ladder    +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_321       +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_multic    +PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_rain      +PATTERN_CW  + 0                &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long 0
+
+hexagonest_patterns
+long @pattern_solo1     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 8&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_triplec   +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 6&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2_opp +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo3     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_solo3_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo3_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+long @pattern_whirlpool2+PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_4spin     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_321       +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_rain      +PATTERN_CW  + 0                &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+long 0
+
+hyper_hexagonest_patterns
+long @pattern_solo1     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 8&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_triplec   +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 6&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 5&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2_opp +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo3     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_solo3_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo3_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+long @pattern_stair2    +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_whirlpool2+PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_rain      +PATTERN_CW  + 0                &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_4spin     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_321       +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+long 0
+
+blackwhite_patterns
+long @pattern_solo1     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 7&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo1     +PATTERN_CW  + 0                &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo1     +PATTERN_CW  + 3                &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_triplec   +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_triplec   +PATTERN_CW  + 0                &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_triplec   +PATTERN_CW  + 3                &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 8&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo2_opp +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 8&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo3     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 7&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_solo3_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 6&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 6&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_dbl +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_solo4_thk +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 4&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+long @pattern_stair1    +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_stair2    +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_whirlpool2+PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_321       +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_3spin     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_4spin     +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_multic    +PATTERN_CW  + OFFSET_RANDOMIZE2&lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+long @pattern_ladder    +PATTERN_CW  + OFFSET_RANDOMIZE &lt;&lt;PATTERN_OFFSET_SHIFT  + 2&lt;&lt;PATTERN_WEIGHT_SHIFT 
+long @pattern_rain      +PATTERN_CW  + 0                &lt;&lt;PATTERN_OFFSET_SHIFT  + 3&lt;&lt;PATTERN_WEIGHT_SHIFT
+
+long 0
+
+{
+pattern_test
+byte 2
+byte W__X__X 
+byte W__X___
+byte 6 &apos; spacing
+}
+pattern_solo1
+byte 1
+byte WXXXXX_
+byte 6 &apos; spacing
+
+pattern_solo2
+byte 1
+byte W_XXX_X
+byte 6 &apos; spacing
+
+
+pattern_solo2_opp&apos;osing
+byte 7
+byte W_XXX_X 
+byte W______[5]
+byte WX_X_XX
+byte 12 &apos; spacing
+
+pattern_solo3
+byte 1
+byte WX_X_X_
+byte 6 &apos; spacing
+
+pattern_solo3_dbl
+byte 3
+byte WX_X_X_
+byte W______
+byte WX_X_X_
+byte 6 &apos; spacing
+
+pattern_solo3_thk
+byte 2
+byte WX_X_X_[2]
+byte 6 &apos; spacing
+
+pattern_triplec
+byte 13
+byte WXXXXX_
+byte W______[5]
+byte WXX_XXX
+byte W______[5]
+byte WXXXXX_
+byte 18 &apos; spacing
+
+
+pattern_solo4
+byte 1
+byte W__X__X
+byte 5 &apos; spacing
+
+pattern_solo4_dbl
+byte 3
+byte W__X__X
+byte W______
+byte W__X__X
+byte 6 &apos; spacing
+
+pattern_solo4_thk
+byte 2
+byte W__X__X 
+byte W__X__X
+byte 6 &apos; spacing
+
+pattern_stair1
+byte 16
+byte WXX_XX_
+byte W______[2]
+byte WX_XX_X   
+byte W______[2]
+byte W_XX_XX 
+byte W______[2]
+byte WXX_XX_ 
+byte W______[2]
+byte WX_XX_X 
+byte W______[2]
+byte W_XX_XX    
+byte 20 &apos; spacing
+
+pattern_stair2
+byte 16
+byte WXX_XX_
+byte W______[2]
+byte WX_XX_X   
+byte W______[2]
+byte W_XX_XX 
+byte W______[2]
+byte WX_XX_X 
+byte W______[2]
+byte WXX_XX_  
+byte W______[2]
+byte W_XX_XX      
+byte 20 &apos; spacing
+
+pattern_multic
+byte 16
+byte WXXXXX_ 
+byte W______[2]
+byte WXXXX_X 
+byte W______[2]
+byte WXXX_XX 
+byte W______[2]
+byte WXX_XXX 
+byte W______[2]
+byte WX_XXXX
+byte W______[2]
+byte W_XXXXX                    
+byte 20 &apos; spacing
+
+pattern_rain
+byte 13
+byte WX_X_X_
+byte W______[2] 
+byte W_X_X_X
+byte W______[2]
+byte WX_X_X_
+byte W______[2]
+byte W_X_X_X  
+byte W______[2]
+byte WX_X_X_
+byte 17 &apos; spacing (increased from 16?)
+
+
+pattern_2spin
+byte 16
+byte WXXX__X
+byte W_____X[2]
+byte W__XXXX
+byte W_____X[2]
+byte WXXX__X
+byte W_____X[2]
+byte W__XXXX
+byte W_____X[2]
+byte WXXX__X
+byte W_____X[2]
+byte W__XXXX
+byte 20 &apos; spacing
+
+pattern_3spin
+&apos;&apos; I slightly altered this pattern to make it shorter and more challenging
+byte 23
+byte WXXXX_X
+byte WX____X[4]
+byte WX_XXXX
+byte WX__XXX
+byte WX___XX
+byte WX____X
+byte WX____X
+byte WXXXX_X
+byte WXXX__X
+byte WXX___X
+byte WX____X
+byte WX____X
+byte WX_XXXX
+byte WX__XXX
+byte WX___XX
+byte WX____X
+byte WX____X
+byte WXXXX_X
+byte WXXX__X
+byte WXX___X
+byte 30 &apos; spacing
+
+pattern_4spin
+byte 13
+byte W_XXXXX
+byte W_____X[5]
+byte WXXXX_X
+byte W_____X[5]
+byte W_XXXXX
+byte 20 &apos; spacing
+
+pattern_whirlpool
+byte 16
+byte WXXXXX_
+byte WXXXX__
+byte WXXX___
+byte WXX____
+byte WX____X
+byte W____XX
+byte W___XX_
+byte W__XX__
+byte W_XX___
+byte WXX____ 
+byte WX____X
+byte W____XX
+byte W___XX_
+byte W__XXX_
+byte W_XXXX_
+byte WXXXXX_
+byte 20 &apos; spacing TODO:remeasure
+
+pattern_whirlpool2
+&apos;&apos; This pattern seems to use weird 1.5 unit walls.
+&apos;&apos; Have made them 1 unit and given it a kinda entry tunnel such that it is easier to not get snagged
+byte 10
+byte WXX_XX_
+byte WXX_XX_
+byte WX__X__
+byte W__X__X
+byte W_X__X_
+byte WX__X__
+byte W__X__X
+byte W_X__X_
+byte WX__X__
+byte WX_XX_X 
+byte 14 &apos; spacing
+
+pattern_321
+byte 16
+byte WXXXXX_
+byte W______[3]
+byte WX___XX
+byte WXX_XXX
+byte WXX_XXX
+byte W_____X
+byte W_____X
+byte W__X__X
+byte W_XXX_X
+byte W_XXX_X
+byte W__X__X
+byte W__X__X
+byte WX___XX
+byte WX___XX
+byte 20 &apos; spacing
+
+pattern_bat
+byte 15
+byte WXXXXX_
+byte W_XXX__
+byte W_XXX__
+byte W_XXX__
+byte W__X___
+byte W__X__X
+byte W__X__X
+byte WX___XX
+byte WX___XX
+byte WX___XX
+byte WXX_XXX[4]
+byte WX___X_
+byte 20 &apos; spacing
+
+pattern_ladder
+byte 13
+byte WXX_XX_
+byte WX__X__[2]
+byte WX_XX_X
+byte WX__X__[2]
+byte WXX_XX_
+byte WX__X__[2]
+byte WX_XX_X
+byte WX__X__[2]
+byte WXX_XX_
+byte 18 &apos; spacing
+
+
+CON
+  SNES_R      = %0000100000000000
+  SNES_L      = %0000010000000000
+  SNES_X      = %0000001000000000
+  SNES_A      = %0000000100000000
+  SNES_RIGHT  = %0000000010000000
+  SNES_LEFT   = %0000000001000000
+  SNES_DOWN   = %0000000000100000
+  SNES_UP     = %0000000000010000
+  SNES_START  = %0000000000001000
+  SNES_SELECT = %0000000000000100
+  SNES_Y      = %0000000000000010
+  SNES_B      = %0000000000000001
+PUB SNES_Read_Gamepad : nes_bits   |   i
+
+DIRA [plat#SNES_LATCH] := 1 &apos; output
+DIRA [plat#SNES_CLK] := 1 &apos; output
+DIRA [plat#SNES_PLAYER1] := 0 &apos; input   
+
+OUTA [plat#SNES_CLK] := 0
+OUTA [plat#SNES_LATCH] := 0
+waitcnt(381+cnt)
+OUTA [plat#SNES_LATCH] := 1
+waitcnt(381+cnt)  
+OUTA [plat#SNES_LATCH] := 0
+waitcnt(381+cnt)
+nes_bits := 0
+nes_bits := INA[plat#SNES_PLAYER1]&lt;&lt;16
+
+repeat i from 0 to 14
+  OUTA [plat#SNES_CLK] := 1 &apos; JOY_CLK = 1
+  waitcnt(381+cnt) 
+  OUTA [plat#SNES_CLK] := 0 &apos; JOY_CLK = 0
+  waitcnt(381+cnt) 
+  nes_bits := (nes_bits &lt;&lt; 1)
+  nes_bits := nes_bits | INA[plat#SNES_PLAYER1]&lt;&lt;16
+
+nes_bits := (!nes_bits)&gt;&lt;0
+
+CON
+
+W______ = %000000
+W_____X = %000001
+W____X_ = %000010
+W____XX = %000011
+W___X__ = %000100
+W___X_X = %000101
+W___XX_ = %000110
+W___XXX = %000111
+W__X___ = %001000
+W__X__X = %001001
+W__X_X_ = %001010
+W__X_XX = %001011
+W__XX__ = %001100
+W__XX_X = %001101
+W__XXX_ = %001110
+W__XXXX = %001111
+W_X____ = %010000
+W_X___X = %010001
+W_X__X_ = %010010
+W_X__XX = %010011
+W_X_X__ = %010100
+W_X_X_X = %010101
+W_X_XX_ = %010110
+W_X_XXX = %010111
+W_XX___ = %011000
+W_XX__X = %011001
+W_XX_X_ = %011010
+W_XX_XX = %011011
+W_XXX__ = %011100
+W_XXX_X = %011101
+W_XXXX_ = %011110
+W_XXXXX = %011111
+WX_____ = %100000
+WX____X = %100001
+WX___X_ = %100010
+WX___XX = %100011
+WX__X__ = %100100
+WX__X_X = %100101
+WX__XX_ = %100110
+WX__XXX = %100111
+WX_X___ = %101000
+WX_X__X = %101001
+WX_X_X_ = %101010
+WX_X_XX = %101011
+WX_XX__ = %101100
+WX_XX_X = %101101
+WX_XXX_ = %101110
+WX_XXXX = %101111
+WXX____ = %110000
+WXX___X = %110001
+WXX__X_ = %110010
+WXX__XX = %110011
+WXX_X__ = %110100
+WXX_X_X = %110101
+WXX_XX_ = %110110
+WXX_XXX = %110111
+WXXX___ = %111000
+WXXX__X = %111001
+WXXX_X_ = %111010
+WXXX_XX = %111011
+WXXXX__ = %111100
+WXXXX_X = %111101
+WXXXXX_ = %111110
+WXXXXXX = %111111
+
+{{
+&boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;
+&boxv;                                    TERMS OF USE: Parallax Object Exchange License                                            &boxv;                                                            
+&boxvr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxvl;
+&boxv;Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation    &boxv; 
+&boxv;files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy,    &boxv;
+&boxv;modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software&boxv;
+&boxv;is furnished to do so, subject to the following conditions:                                                                   &boxv;
+&boxv;                                                                                                                              &boxv;
+&boxv;The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.&boxv;
+&boxv;                                                                                                                              &boxv;
+&boxv;THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE          &boxv;
+&boxv;WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR         &boxv;
+&boxv;COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,   &boxv;
+&boxv;ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                         &boxv;
+&boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;
+}}
+    </code></pre>
+    <pre><code>
+PUB sin(angle) : s | c,z
+              &apos;angle: 0..8192 = 360&deg;
+  s := angle
+  if angle &amp; $800
+    s := -s
+  s |= $E000&gt;&gt;1
+  s &lt;&lt;= 1
+  s := word[s]
+  if angle &amp; $1000
+    s := -s                    &apos; return sin = -$FFFF..+$FFFF 
+  frqa += 1
+
+    </code></pre>
+    <pre><code>
+PUB multireturn(angle) : s,c,z
+              &apos;angle: 0..8192 = 360&deg;
+  s := angle
+  if angle &amp; $800
+    s := -s
+  s |= $E000&gt;&gt;1
+  s &lt;&lt;= 1
+  s := word[s]
+  if angle &amp; $1000
+    s := -s                    &apos; return sin = -$FFFF..+$FFFF 
+
+    </code></pre>
+    <pre><code>
+&apos;&apos; Voice architecture:                                        Parameters: (10 bytes)
+&apos;&apos;                           &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;                          - volume              0..255
+&apos;&apos; &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;  &boxdr;&boxh;&boxh;&boxh;&boxdl;           &boxv; Env &boxv;                          - panorama            0..127
+&apos;&apos; &boxv; Osc2 &boxvr;&boxh;&boxh;&boxvl;&#xF082;&#xF085;&#xF082;&boxvr;&boxh;&boxhd;&boxh;&boxh;&boxh;&boxh;&boxdl;    &boxur;&boxh;&boxh;&boxhd;&boxh;&boxh;&boxul;      pl                  - semitone osc1       0..255
+&apos;&apos; &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;  &boxur;&boxh;&boxh;&boxh;&boxul; &boxv;    &#xF0A2;    &boxdr;&boxh;&boxh;&boxhu;&boxh;&boxh;&boxdl;    &boxdr;&boxh;&#xF0A6;&#xF0A9;&boxh;&#xF0BB; L DAC          - semitone osc2       0..255
+&apos;&apos;         pm&boxdr;&boxh;&boxh;&#xF08F;&boxvr;&boxh;&boxul;   (+)&boxh;&#xF0BB;&boxh;&boxvl; DCA &boxvr;&boxh;&boxhd;&boxh;&boxh;&boxvl;                     - detune osc2         0..255
+&apos;&apos; &boxdr;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxdl;  &#xF0A2;  &boxdr;&boxh;&boxh;&boxh;&boxdl;   &#xF0A0;    &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul; &boxv;  &boxur;&boxh;&#xF0A6;&#xF0A9;&boxh;&#xF0BB; R DAC          - PhaseMod intensity  7..0
+&apos;&apos; &boxv; Osc1 &boxvr;&#xF0BB;(+)&boxh;&boxvl;&#xF082;&#xF085;&#xF082;&boxvr;&boxh;&boxh;&boxh;&boxhu;&boxh;&#xF0A6;&#xF0A9;&boxdl;pm      &boxv;    pr                  - Feedback intensity  7..0
+&apos;&apos; &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;  &#xF0A0;  &boxur;&boxh;&boxh;&boxh;&boxul;       &#xF0A2;        &boxv;                        - Envelope Attack     0..255
+&apos;&apos;           &boxur;&boxh;&boxh;&boxh;&boxh;&boxh;&#xF08F;&boxvr;&boxh;&boxh;&boxh;&boxh;&boxh;&#xF0BA;(+)&#xF0BA;&boxh;&boxh;&boxh;&boxh;&boxh;&boxh;&boxul;                        - Envelope Decay&amp;Release  0..255
+&apos;&apos;                 fb                                         - Envelope Sustain    0..255
+&apos;&apos;
+&apos;&apos;Legend: &#xF082;&#xF085;&#xF082; = Sawtooth&#xF0BB;Triangle Shaper, (+) = Mixer, &#xF0A6;&#xF0A9; &#xF08F;&boxvr; = 2^n Attenuator (shifts)
+&apos;&apos; Osc = Sawtooth Oscillator  (DDS)
+&apos;&apos; Env = Envelope Generator (A D/R S)
+&apos;&apos; DCA = Digital Attenuator (mult 8*32)
+    </code></pre>
+    <pre><code>
+PUB Fullsine(x) | q                                  &apos; x is from counter, 13 msbs 0--8192 represents 0--360 degrees
+  q := x &gt;&gt; 11                                          &apos; quadrant, 0 to 3
+  x := (x &amp; $7ff) &lt;&lt; 1                                  &apos; 0 to 90- degrees, adjust to 2048 word addresses.
+  case q                                                &apos; by quadrant
+    0 : result := word[$E000 + x]                       &apos; 
+    1 : result := word[$F001 - x]
+    2 : result := -word[$E000 + x]
+    3 : result := -word[$F001 - x]
+  return   
+    </code></pre>
+    <pre><code>
+{
+################################################################################################################################
+#         reSound - A sound driver and mixer for the Parallax Propeller 2 (Beta 2)   (C) 2020 Johannes Ahlebrand               #                                                            
+################################################################################################################################
+#                                    TERMS OF USE: Parallax Object Exchange License                                            #                                                            
+################################################################################################################################
+#Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation    # 
+#files (the &quot;Software&quot;), to deal in the Software without restriction, including without limitation the rights to use, copy,    #
+#modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software#
+#is furnished to do so, subject to the following conditions:                                                                   #
+#                                                                                                                              #
+#The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.#
+#                                                                                                                              #
+#THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE          #
+#WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR         #
+#COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,   #
+#ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                         #
+################################################################################################################################
+}
+
+CON
+  &apos; Setup configurations
+  DAC_8BIT_NOISE         = %00_00_01  &apos; DAC 8-bit noise
+  DAC_16BIT_PWM_DITHER   = %00_00_10  &apos; DAC 16-bit dither, noise
+  DAC_16BIT_NOISE_DITHER = %00_00_11  &apos; DAC 16-bit dither, PWM
+  ANALOG_990_OHM_3_3_V   = %00_00_00  &apos; 990 ohm, 3.3V
+  ANALOG_600_OHM_2_0_V   = %01_00_00  &apos; 600 ohm, 2.0V
+  ANALOG_123_OHM_3_3_V   = %10_00_00  &apos; 123 ohm, 3.3V
+  ANALOG_75_OHM_2_0_V    = %11_00_00  &apos;  75 ohm, 2.0V
+  DIR_ENABLE_OUTPUT      = %00_01_00
+  DAC_MODE_PWM           = DIR_ENABLE_OUTPUT | ANALOG_75_OHM_2_0_V | DAC_16BIT_PWM_DITHER
+  DAC_MODE_DEFAULT       = DIR_ENABLE_OUTPUT | ANALOG_75_OHM_2_0_V | DAC_16BIT_NOISE_DITHER
+  DAC_MODE_NOISE         = DIR_ENABLE_OUTPUT | ANALOG_75_OHM_2_0_V | DAC_8BIT_NOISE
+
+  &apos; Input to output mix options
+  MIX_QUADRO             = %11111111_111_111_111_111_000_000_000_000
+  MIX_STEREO             = %11111111_111_111_111_111_111_111_000_000
+  MIX_MONO               = %11111111_111_111_111_111_111_111_111_000
+
+  &apos; Input channel options
+  SIGNED16            = %11111111_11111111111_11111_1111000_1
+  SIGNED8             = %11111111_11111111111_11111_1001101_1
+  UNSIGNED16          = %11111111_11111111111_11111_0111000_1
+  UNSIGNED8           = %11111111_11111111111_11111_0001101_1
+  ATTENTION           = %11111111_11111111111_00000_1111111_1
+  HILO                = %11111111_11111111111_01000_1111111_1
+  I_FX1               = %11111110_11111111111_11111_1111111_1
+  I_FX2               = %11111101_11111111111_11111_1111111_1
+  I_FX3               = %11111011_11111111111_11111_1111111_1
+  I_FX4               = %11110111_11111111111_11111_1111111_1
+  I_FX5               = %11101111_11111111111_11111_1111111_1
+  I_FX6               = %11011111_11111111111_11111_1111111_1
+  I_FX7               = %10111111_11111111111_11111_1111111_1
+  I_FX8               = %01111111_11111111111_11111_1111111_1
+
+  &apos; Common output options
+  C_ATTENTION         = %00001111
+  C_FX1               = %11111110
+  C_FX2               = %11111101
+  C_FX3               = %11111011
+  C_FX4               = %11110111
+  C_FX5               = %11101111
+  C_FX6               = %11011111
+  C_FX7               = %10111111
+  C_FX8               = %01111111
+
+  HZ = $8000_0000
+
+
+PUB start()
+&apos;
+  coginit(COGEXEC_NEW, @RESOUND, hubFootprintStart)
+
+PUB init(sysClock_1, mixingFrequency_1, forceHq_1, nrInputs_1, leftPin_1, rightPin_1, commonEffectsMask_1, enableAttention_1, hubRegPtr_1) 
+
+&apos; Initialize reSound according to the parameters given in stereo mode
+&apos;
+    &apos; @sysClock          - The Parallax P2 system clock in Hz
+    &apos; @mixingFrequency   - The mixing frequency that reSound should run at
+    &apos; @forceHq           - This forces the sample period to be a multiple of 256 to enable the HQ PWM smart pin output mode
+    &apos; @nrInputs          - The number of inputs buffers to process by the reSound mixer 
+    &apos; @leftPin           - The smart pin number that should output the left audio signal
+    &apos; @rightPin          - The smart pin number that should output the right audio signal
+    &apos; @commonEffectsMask - Sets wich common effects should be used, such as reverb, lowpass filter, etc
+    &apos; @enableAttention   - Enable cog attention events 
+    &apos; @hubRegPtr         - A pointer to hub RAM where reSound should store its data (this memory chunk needs to be &quot;big enough&quot;)
+&apos;
+
+  left := leftPin_1
+  right := rightPin_1
+  initExplicit(sysClock_1, mixingFrequency_1, forceHq_1, nrInputs_1, 2, @left, commonEffectsMask_1, enableAttention_1, hubRegPtr_1)
+
+
+PUB initExplicit(sysClock_2, mixingFrequency_2, forceHq, nrInputs_2, nrOutputs_2, pinConfigs_2, commonEffectsMask_2, enableAttention_2, hubRegPtr_2)
+&apos;
+&apos; Initialize reSound according to the parameters given in explicit mode
+&apos;
+    &apos; @sysClock           - The Parallax P2 system clock in Hz
+    &apos; @mixingFrequency    - The mixing frequency that reSound should run at
+    &apos; @forceHq            - This forces the sample period to be a multiple of 256 to enable the HQ PWM smart pin output mode
+    &apos; @nrInputs           - The number of inputs buffers to process by the reSound mixer 
+    &apos; @nrOutputs          - The number of analog output pins to use
+    &apos; @pinConfigs         - A list of P2 pin numbers to use as analog outputs
+    &apos; @commonEffectsMask  - Sets wich common effects should be used, such as reverb, lowpass filter, etc
+    &apos; @enableAttention    - Enable cog attention events (needed for buffer fill interrupt handling)
+    &apos; @hubRegPtr          - A pointer to hub RAM where reSound should store its data (this memory chunk needs to be &quot;big enough&quot;)
+&apos;
+
+  &apos; Initialize all outputs amplitudes to zero
+  repeat i from 0 to 7
+    outputAmplitude[i] := 0
+
+  &apos; Setup reSound API variables and pointers
+  systemClock := sysClock_2
+  hiloMapPtr := hubRegPtr_2
+  hubFootprintStart := hubRegPtr_2 + 4
+  configurationPointer := hubFootprintStart
+  configuredInputsCounter := 0
+  numberOfInputs := nrInputs_2
+  mixFrequency := mixingFrequency_2
+
+  &apos; Setup the reSound driver init data
+  word[configurationPointer][0] := systemClock / mixingFrequency_2 
+  byte[configurationPointer][3] := nrInputs_2
+  byte[configurationPointer][4] := nrOutputs_2
+  byte[configurationPointer][5] := commonEffectsMask_2 
+
+  if forceHq
+    word[configurationPointer][0] := word[configurationPointer][0] &amp; $FF00
+
+  &apos; Use the better quality option, PWM dither, if sysClock is a 256x multiple of the mixing frequency
+  if (word[configurationPointer][0] &amp; $FF) == 0
+    byte[configurationPointer][2] := DAC_MODE_PWM 
+  else
+    byte[configurationPointer][2] := DAC_MODE_DEFAULT 
+
+  &apos; Set the right skip pattern for attention on/off
+  if enableAttention_2
+    byte[configurationPointer][6] := C_ATTENTION
+  else
+    byte[configurationPointer][6] := %11101111
+
+  &apos; Increment the configuration pointer to point beyond the 7 static parameters
+  configurationPointer += 7
+
+  &apos; Register all smartpins that should be outputs
+  repeat i from 0 to nrOutputs_2-1
+    byte[configurationPointer][i] := byte[pinConfigs_2][i]
+
+  &apos; Increment the configuration pointer to point beyond all the init data
+  configurationPointer += nrOutputs_2
+
+PUB configureInput(bufferPtr_3, bufferSize_3, maxBufferSize_3, frequency_3, optionsMask_3, attentionCogNr_3) : r
+&apos;
+&apos; Configure an input channel in stereo mode
+&apos;
+    &apos; @bufferPtr      - A pointer to the sound buffer in hub memory
+    &apos; @bufferSize     - The size of the sound buffer in hub memory
+    &apos; @maxBufferSize  - Sets the maximum allowed buffer size for this sound buffer (the smaller the better frequency resolution)
+    &apos; @frequency      - The frequency to use when processing the sound buffer
+    &apos; @optionsMask    - A skip pattern to enable/disable different sample processing options
+    &apos; @attentionCogNr - If attention is enabled this sets the cog to get the attention of
+&apos;
+
+  r := configureInputExplicit(bufferPtr_3, bufferSize_3, maxBufferSize_3, frequency_3, optionsMask_3, MIX_STEREO, attentionCogNr_3) 
+  &apos;return 
+
+
+PUB configureInputExplicit(bufferPtr_4, bufferSize_4, maxBufferSize_4, frequency_4, optionsMask_4, outputMixMask_4, attentionCogNr_4) : r | nrOfMixes, inputHandle_1, bufferSizeShl, ptrAdjustment, phaseAccuShift
+&apos;
+&apos; Configure an input channel in explicit mode
+&apos;
+    &apos; @bufferPtr      - A pointer to the sound buffer in hub memory
+    &apos; @bufferSize     - The size of the sound buffer in hub memory
+    &apos; @maxBufferSize  - Sets the maximum allowed buffer size for this sound buffer (the smaller the better frequency resolution)
+    &apos; @frequency      - The frequency to use when processing the sound buffer
+    &apos; @optionsMask    - A skip pattern to enable/disable different sample processing options
+    &apos; @outputMixMask  - A skip pattern do enable/disable mxing to different outputs
+    &apos; @attentionCogNr - If attention is enabled this sets the cog to get the attention of
+&apos;
+
+  inputHandle_1 := configurationPointer &apos; Input handle is the start address of the current inputs parameters array in hub memory
+
+  &apos; Get the accumulator shift amount based on the wanted buffer size
+  maxBufferSize_4 := 33 - (encod maxBufferSize_4)
+
+  &apos; Setup the first common options
+  long[configurationPointer][0] := frequency_4      &apos; Frequency
+  long[configurationPointer][4] := maxBufferSize_4  &apos; Shift amount, how many bits of the phase accumulator is used for the sample pointer?
+  long[configurationPointer][5] := optionsMask_4    &apos; Common sample options, 8bit, 16bit, signed, unsigned, little/big endianess
+  long[configurationPointer][6] := outputMixMask_4  &apos; Which output channels should output this input?
+
+  phaseAccuShift := long[configurationPointer][4] &apos; Get the accumulator shift amount for this input
+  bufferSizeShl  := bufferSize_4 &lt;&lt; phaseAccuShift
+  ptrAdjustment  := -bufferSizeShl
+
+  &apos; Handle 8 or 16 bit samples differently
+  if(long[inputHandle_1][5] &amp; 32)
+    ptrAdjustment &gt;&gt;= phaseAccuShift - 1 
+  else
+    ptrAdjustment &gt;&gt;= phaseAccuShift
+
+  &apos; Fill in the rest of the common options
+  long[configurationPointer][1] :=  bufferPtr_4 - ptrAdjustment &apos; Buffer pointer, where in hub memory is the starting point of the sample/buffer?
+  long[configurationPointer][2] := -bufferSizeShl               &apos; Trigger point, from where in the buffer should we start playing?
+  long[configurationPointer][3] :=  bufferSizeShl               &apos; Loop size, how big is the sample/buffer loop?
+
+  &apos; Increment the configuration pointer to point beyond the 7 common fixed parameters
+  configurationPointer += 28
+
+  &apos; Increment the configuration pointer the right amount if the &quot;read in attention mask option&quot; is active
+  if (optionsMask_4 &amp; (1 &lt;&lt; 8)) == 0
+    word[configurationPointer] := 1 &lt;&lt; attentionCogNr_4
+    &apos;configurationPointer += 2
+
+  &apos; Increment the configuration pointer the right amount according to the number of effect parameter of the current input
+  repeat i from 0 to 7
+    if (optionsMask_4 &amp; (1 &lt;&lt; (i + 24))) == 0
+      configurationPointer += inputEffectParams[i]
+
+  &apos; Calcualte the amount of output channels that should be used when mixing this input channel
+  nrOfMixes := (ones ((!outputMixMask_4) &amp; $00_ffffff)) / 3
+
+  &apos; Initialize the volume level for each output to zero
+  repeat i from 0 to nrOfMixes - 1
+    word[configurationPointer][i] := 0 
+
+  &apos; Increment the hub register pointer the right amount according to the selected number of output mixes for the current input
+  configurationPointer += nrOfMixes &lt;&lt; 1 &apos; Each mix value is 16 bits
+
+  &apos; Count how many inputs that have been configured
+  configuredInputsCounter++
+
+  return inputHandle_1
+
+
+PUB playSample(inputHandle_2, samplePtr_2, length_2, loopSize_5, frequency_5, volume_2, panning_2) | mix1_2, mix2_2
+&apos;
+&apos; Play a sample in a specific input channel using stereo mode 
+&apos;
+    &apos; @inputHandle - A pointer to the parameter data in hub memory for a specific input
+    &apos; @samplePtr   - A pointer in hub memory where the sample is located
+    &apos; @length      - The number of samples that the audio sample contain
+    &apos; @loopSize    - The number of samples that should be looped when reaching the end of the audio sample (1 means no loop)
+    &apos; @frequency   - The frequency to play back the sample at
+    &apos; @volume      - The volume that should be for mixing the input. A value from -16384 to 16383 (- means inverted waveform)
+    &apos; @panning     - Panning right/left. 0 = max left, 65535 = max right, 32768 = in the middle
+&apos;
+
+  mix1_2 := ((65535 - panning_2) * volume_2) &gt;&gt; 16
+  mix2_2 := (panning_2 * volume_2) &gt;&gt; 16
+  playSampleExplicit(inputHandle_2, samplePtr_2, length_2, loopSize_5, frequency_5, mix1_2, mix2_2, 0, 0, 0, 0, 0, 0)
+
+
+PUB playSampleExplicit(inputHandle_3, samplePtr_3, length_3, loopSize_6, frequency_6, mix1_3, mix2_3, mix3_3, mix4_3, mix5_3, mix6_3, mix7_3, mix8_3) | bufferSizeShl_2, ptrAdjustment_2, phaseAccuShift_2
+&apos;
+&apos; Play a sample in a specific input channel using explicit mode 
+&apos;
+    &apos; @inputHandle - A pointer to the parameter data in hub memory for a specific input
+    &apos; @samplePtr   - A pointer in hub memory where the sample is located
+    &apos; @length      - The number of samples that the audio sample contain
+    &apos; @loopSize    - The number of samples that should be looped when reaching the end of the audio sample (1 means no loop)
+    &apos; @frequency   - The frequency to play back the sample at
+    &apos; @mix1 - mix8 - The gain values for up to 8 outputs. Should be a value from -16384 to 16383 (- means inverted waveform)
+&apos;
+
+  if samplePtr_3 == 0 or inputHandle_3 == 0
+    return
+
+  phaseAccuShift_2 := long[inputHandle_3][4] 
+  bufferSizeShl_2  := length_3 &lt;&lt; phaseAccuShift_2
+  ptrAdjustment_2  := -bufferSizeShl_2
+
+  if(long[inputHandle_3][5] &amp; 32)
+    ptrAdjustment_2 &gt;&gt;= phaseAccuShift_2 - 1  
+  else
+    ptrAdjustment_2 &gt;&gt;= phaseAccuShift_2
+
+  ifnot inputHandle_3 == 0
+    mixExplicit(inputHandle_3, frequency_6, 0, mix1_3, mix2_3, mix3_3, mix4_3, mix5_3, mix6_3, mix7_3, mix8_3)
+
+  long[inputHandle_3][1] :=  samplePtr_3 - ptrAdjustment_2
+  long[inputHandle_3][2] := -bufferSizeShl_2
+  long[inputHandle_3][3] :=  loopSize_6 &lt;&lt; phaseAccuShift_2
+
+
+PUB mix(inputHandle_4, freq_3, vol_3, pan_3) | mix1_4, mix2_4
+&apos;
+&apos; Mix a specific input channel in stereo mode using frequency, volume and panning parameters 
+&apos;
+    &apos; @inputHandle  - A pointer to the parameter data in hub memory for a specific input
+    &apos; @freq         - The frequency that reSound mix the input at
+    &apos; @vol          - The volume that should be for mixing the input. A value from -16384 to 16383 (- means inverted waveform)
+    &apos; @pan          - Panning right/left. 0 = max left, 65535 = max right, 32768 = in the middle
+&apos;
+
+  mix1_4 := ((65535 - pan_3) * vol_3) &gt;&gt; 16
+  mix2_4 := (pan_3 * vol_3) &gt;&gt; 16
+  mixExplicit(inputHandle_4, freq_3, 0, mix1_4, mix2_4, 0, 0, 0, 0, 0, 0)
+
+
+PUB mixExplicit(inputHandle_5, frequency_7, effects, mix1_5, mix2_5, mix3_5, mix4_5, mix5_5, mix6_5, mix7_5, mix8_5) | optionsMask_7, lastParam, j, headroom
+&apos;
+&apos; Mix a specific input channel in explicit mode using frequency, effect parameters and mix amounts for all outputs
+&apos;
+    &apos; @inputHandle  - A pointer to the parameter data in hub memory for a specific input
+    &apos; @freq         - The frequency that reSound mix the input at
+    &apos; @effects      - The effects parameters as a pointer to an array of 16 bits values
+    &apos; @mix1 - mix8  - The gain values for up to 8 outputs. A value from -16384 to 16383 (- means inverted waveform)
+&apos;
+
+  if inputHandle_5 == 0 or frequency_7 == 0
+    return    
+
+  &apos; If the HZ bit is set (MSB), calculate the frequency in Hz instead of the raw phase frequency
+  if frequency_7 &amp; HZ
+    frequency_7 := frequency_7 &amp; $7FFF_FFFF
+    frequency_7 := calculateFrequencyHz(mixFrequency, frequency_7, 1 &lt;&lt; (long[inputHandle_5][4]))
+
+  &apos; Set the frequency
+  long[inputHandle_5] := frequency_7
+  optionsMask_7 := (long[inputHandle_5][5]) &apos; Get a copy of the options mask
+
+  &apos; Point beyond the 7 longs fixed input parameters
+  inputHandle_5 += 28
+
+  &apos; Increment the inputHandle pointer the right amount if the attention option is active
+  if (optionsMask_7 &amp; (1 &lt;&lt; 8)) == 0
+    inputHandle_5 += 2
+
+  &apos; Iterate over all enabled effect processors of the selected input and set each parameter
+  repeat i from 0 to 7
+    if (optionsMask_7 &amp; (1&lt;&lt;(24+i))) == 0
+
+      lastParam := inputEffectParams[i] &gt;&gt; 1
+      ifnot lastParam == 0
+        --lastParam
+
+        repeat j from 0 to lastParam
+          word[inputHandle_5][j] := word[effects][j]
+
+      inputHandle_5 += inputEffectParams[i]
+
+  &apos; Iterate over all available outputs and set mix amount for this input
+  repeat i from 0 to (byte[hubFootprintStart][4] - 1)   &apos; Number of enabled output pins
+
+    outputAmplitude[i] -= word[inputHandle_5][i]
+    headroom := 16384 - outputAmplitude[i]
+
+    &apos; This logic handles so that too much gain doesn&apos;t clip/distort the composite audio signal
+    if long[@mix1_5][i] &lt;= headroom
+      word[inputHandle_5][i] := long[@mix1_5][i]
+      outputAmplitude[i]     += long[@mix1_5][i]
+    else
+      word[inputHandle_5][i] := headroom
+      outputAmplitude[i]     += headroom
+
+
+&apos; Returns a handle as a reference to &quot;the right bit&quot; in the 32 bit HiLo map for a specific input
+&apos;
+PUB getHiloHandle() : r
+  return (1 &lt;&lt; ((numberOfInputs + 1) - configuredInputsCounter))
+
+
+&apos; Returns true if an unhandled buffer swap has occurred for a specific input 
+&apos;
+    &apos; @hiloHandle - A 32 bit mask value to pinpoint the right HiLo bit for a specific input
+&apos;
+PUB bufferSwapped(hiloHandle) : r
+
+  if ((long[hiloMapPtr] ^ hiloXorMap) &amp; hiloHandle) == 0
+    return false
+  else
+    hiloXorMap ^= hiloHandle    &apos; Flip the right Hilo xor map bit to indicate that the new buffer is handled
+    return true
+
+
+PUB getWriteBuffer(hiloHandle, inputHandle) : r | halfBufferOffset
+&apos;
+&apos; Returns a pointer to the back buffer for a specific input
+&apos;
+    &apos; @hiloHandle  - A 32 bit mask value to pinpoint the right HiLo bit for a specific input
+    &apos; @inputHandle - A pointer to the parameter data in hub memory for a specific input
+&apos;
+
+  &apos; Return one of the double buffers (HI or LO) to be handled
+  if long[hiloMapPtr] &amp; hiloHandle
+    r := ((long[inputHandle][1]))
+    &apos;return ((long[inputHandle][1]))                     &apos; Return LO buffer
+  else
+    halfBufferOffset := (-1 &gt;&gt; long[inputHandle][4]) + 1
+    ifnot(long[inputHandle][5] &amp; 32)
+      halfBufferOffset &gt;&gt;= 1
+    r := ((long[inputHandle][1]) + halfBufferOffset)
+    &apos;return ((long[inputHandle][1]) + halfBufferOffset)  &apos; Return HI buffer
+
+
+PUB fillStereo16(inBuffer, nrSamples, inputHandle1, inputHandle2, hiloHandle) | audioBuffer1, audioBuffer2 
+&apos;
+&apos; Takes an array of multiplexed 16 bit stereo samples and demuxes/fills up two 16 bit input buffers
+&apos;
+    &apos; @inBuffer     - A pointer to the multiplexed 16 bit stereo data to process
+    &apos; @nrSamples    - The number of muxed stereo samples to be processed
+    &apos; @inputHandle1 - A pointer to the parameter data in hub memory for the first input
+    &apos; @inputHandle2 - A pointer to the parameter data in hub memory for the second input
+    &apos; @hiloHandle   - A 32 bit mask value to pinpoint the right HiLo bit for a specific input
+&apos;
+
+  &apos; Get pointers to the two input back buffers to fill up
+  audioBuffer1 := getWriteBuffer(hiloHandle, inputHandle1)
+  audioBuffer2 := getWriteBuffer(hiloHandle, inputHandle2)
+
+  &apos; Demux the two 16 bit stereo channels into the two back buffers
+  repeat i from 0 to nrSamples - 1 
+    word[audioBuffer1][i] := word[inBuffer][ i &lt;&lt; 1]
+    word[audioBuffer2][i] := word[inBuffer][(i &lt;&lt; 1) + 1]
+
+
+&apos; Private helper functions
+&apos;
+PRI calculateFrequencyHz(mixingFrequency, frequency_8, accuTopBits) : r | upper, lower
+
+  org
+    QMUL    accuTopBits, frequency_8
+    GETQX   lower
+    GETQY   upper
+    SETQ    upper
+    QDIV    lower, mixingFrequency
+    GETQX   frequency_8
+  end
+
+  return frequency_8
+
+
+VAR
+  long hiloMapPtr
+  long hiloXorMap
+  long hubFootprintStart
+  long configurationPointer
+  long systemClock
+  byte left
+  byte right
+  long configuredInputsCounter
+  long numberOfInputs
+  long mixFrequency
+  word outputAmplitude[8]
+  long i
+
+
+
+DAT org
+&apos;######################################################################################################################
+&apos;                             reSound v0.5 - Parallax Propeller 2 assembly source
+&apos;######################################################################################################################
+
+&apos;----------------------------------------------------------
+&apos;            Read in all configuration parameters
+&apos;----------------------------------------------------------
+RESOUND       mov       hiloChnMapPtr, PTRA
+              sub       hiloChnMapPtr, #4
+              rdfast    #0, PTRA                          &apos; Read in the static configuration parameter first
+              rfword    samplePeriod
+              rfbyte    dacMode
+              rfbyte    nrInputs
+              rfbyte    numberOfOutputs
+              and       numberOfOutputs, #7               &apos; There can never be more than 8 output channels
+              mov       outputSkipPattern, numberOfOutputs&apos; Calculate the skip pattern to enable/disable outputs
+              shl       outputSkipPattern, #1             
+              sub       outputSkipPattern, #1
+              bmask     outputSkipPattern
+              xor       outputSkipPattern, mask16
+              shl       outputSkipPattern, #16
+
+              rfword    temp                              &apos; This load and sets the effect configuration
+              setword   outputSkipPattern, temp, #0
+
+              mov       itt, #0                           &apos; Dynamically read in up to 8 pin number definitions
+              rep       #4, numberOfOutputs
+                rfbyte  hubValue
+                altd    itt, #pinDefinitions 
+                mov     0-0, hubValue 
+                add     itt, #1
+
+&apos;----------------------------------------------------------
+&apos; Configure the smartpin DAC mode according to the params                  
+&apos;----------------------------------------------------------
+              mov       smartpinConfig, dacMode           &apos; Smartpin DAC mode
+              and       smartpinConfig, #%11
+              shl       smartpinConfig, #1
+              andn      dacMode, #%11                     &apos; DIR/OUT control
+              shl       dacMode, #4
+              or        smartpinConfig, dacMode
+              and       smartpinConfig, #%11000110
+              andn      dacMode, #$ff                     &apos; Analog out mode
+              shl       dacMode, #8
+              or        smartpinConfig, dacMode
+              or        smartpinConfig, fixedConfigBits
+
+              mov       itt, #0                           &apos; Iterate over and configure each smartpin
+              rep       #5, numberOfOutputs
+                alts    itt, #pinDefinitions
+                wrpin   smartpinConfig, 0-0
+                alts    itt, #pinDefinitions
+                wxpin   samplePeriod, 0-0
+                add     itt, #1
+
+              mov       itt, #0                           &apos; Iterate over and enable all smartpin DAC outputs
+              rep       #3, numberOfOutputs
+                altd    itt, #pinDefinitions
+                dirh    0-0
+                add     itt, #1
+
+              mov       temp, pinDefinitions              &apos; Configure selectable event 1 to triggers at each new sample period
+              or        temp, #%001_000000
+              setse1    temp
+              add       PTRA, numberOfOutputs             &apos; Set the hub register pointer to the
+              add       PTRA, #7                          &apos; &quot;per sample refreshed&quot; registers in hub memory
+
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+
+
+&apos;----------------------------------------------------------
+&apos;----------------------------------------------------------
+&apos;                        Main loop 
+&apos;----------------------------------------------------------
+
+mainLoop      rdfast    #0, PTRA
+              mov       itt, nrInputs                       &apos; itt = input buffer index
+
+&apos;----------------------------------------------------------
+&apos;      Iterate over and process all input buffers 
+&apos;----------------------------------------------------------
+inBufferLoop  rflong    frequency                      wz &apos; Read in the first 7 fixed input buffer registers
+        if_nz mov       phaseAccuNr, itt
+              rflong    bufferPointer
+              getptr    triggerOffsetPtr
+              rflong    triggerOffset                  wz
+              rflong    loopSize
+              rflong    phaseShiftAmount
+              rflong    optionsMask
+              rflong    outputMixMask
+
+              alts      phaseAccuNr, #511                 &apos; Handle phase accumulation, looping and sample pointer calculation
+              mov       phase, 0-0
+              add       phase, frequency               wc &apos; Add the frequency value into the phase accumulator
+        if_c  sub       phase, loopSize                   &apos; Handle buffer looping
+        if_nz mov       phase, triggerOffset
+        if_nz wrlong    #0, triggerOffsetPtr
+              altd      phaseAccuNr, #511
+              mov       0-0, phase
+              mov       phaseCopy, phase
+
+&apos;----------------------------------------------------------
+&apos;             Read in sample and handle options                    
+&apos;----------------------------------------------------------
+              shr       phase, phaseShiftAmount           &apos; Get the X top most bits of the phase as a offset into the sample buffer 
+              skipf     optionsMask
+
+&apos;              Common sample options (8 slots)
+&apos;---------------------------------------------------------- 
+              nop
+              shl       phase, #1                         &apos; Shift from 8 to 16 bit sample address
+              add       bufferPointer, phase              &apos; Add the phase to the buffer pointer
+              rdword    hubSample, bufferPointer          &apos; Read 16 bit sample
+              movbyts   hubSample, #%%01                  &apos; Handle big endianess
+              rdbyte    hubSample, bufferPointer          &apos; Read 8 bit sample
+              shl       hubSample, #8                     &apos; Convert 8 bit sample to 16 bit
+              bitnot    hubSample, #15                    &apos; Handle unsigned sample
+
+&apos;            attentionMask event option (5 slots)
+&apos;---------------------------------------------------------- 
+              rfword    temp                              &apos; Generate an attentionMask event on half and full buffer wraps
+              add       phaseCopy, V8000000
+        if_nc cmp       phaseCopy, frequency             wc
+        if_c  or        attentionMask, temp 
+        if_c  bitnot    hiloChnMap, itt 
+
+&apos;             Free for future use (11 slots)
+&apos;---------------------------------------------------------- 
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+              nop
+
+&apos;          Call up to 8 input effect processors
+&apos;---------------------------------------------------------- 
+              call      #\inputEffect0 
+              call      #\inputEffect1 
+              call      #\inputEffect2 
+              call      #\inputEffect3 
+              call      #\inputEffect4 
+              call      #\inputEffect5 
+              call      #\inputEffect6 
+              call      #\inputEffect7 
+
+&apos;----------------------------------------------------------
+&apos;                      Handle mixing 
+&apos;----------------------------------------------------------    
+              skipf     outputMixMask                      &apos; Dynamically mix current dry sample into up to 8 output pins
+              rfword    mixAmount
+              scas      hubSample, mixAmount
+              adds      outSample + 0, #0
+              rfword    mixAmount
+              scas      hubSample, mixAmount
+              adds      outSample + 1, #0
+              rfword    mixAmount
+              scas      hubSample, mixAmount
+              adds      outSample + 2, #0
+              rfword    mixAmount
+              scas      hubSample, mixAmount
+              adds      outSample + 3, #0
+              rfword    mixAmount
+              scas      hubSample, mixAmount
+              adds      outSample + 4, #0
+              rfword    mixAmount
+              scas      hubSample, mixAmount
+              adds      outSample + 5, #0
+              rfword    mixAmount
+              scas      hubSample, mixAmount
+              adds      outSample + 6, #0
+              rfword    mixAmount
+              scas      hubSample, mixAmount
+              adds      outSample + 7, #0
+
+              adds      commonEffectSample + 0, hubSample  &apos; Mix current sample into up to 8 effects
+              adds      commonEffectSample + 1, hubSample
+              adds      commonEffectSample + 2, hubSample
+              adds      commonEffectSample + 3, hubSample
+              adds      commonEffectSample + 4, hubSample
+              adds      commonEffectSample + 5, hubSample
+              adds      commonEffectSample + 6, hubSample
+              adds      commonEffectSample + 7, hubSample
+
+              djnz      itt, #inBufferLoop                 &apos; Iterate to the next input buffer 
+
+&apos;----------------------------------------------------------
+&apos;   Output samples to the different DAC pins and 
+&apos;   wait the remaining CPU cycles of the current period        
+&apos;----------------------------------------------------------
+              skipf     outputSkipPattern                 &apos; Call up to 8 common effect processors
+              call      #\commonEffect0 
+              call      #\commonEffect1 
+              call      #\commonEffect2 
+              call      #\commonEffect3 
+              call      #\commonEffect4 
+              call      #\commonEffect5 
+              call      #\commonEffect6 
+              call      #\commonEffect7 
+
+              nop 
+              nop
+              nop
+              nop       &apos;setq      #0                                 
+              wrlong    hiloChnMap, hiloChnMapPtr 
+              cmp       attentionMask, #0                   wz
+        if_nz cogatn    attentionMask
+        if_nz mov       attentionMask, #0
+
+              wypin     outSample + 0, pinDefinitions + 0 &apos; Output signal on up to 8 smart pins 
+              mov       outSample + 0, initDcLevel  
+              wypin     outSample + 1, pinDefinitions + 1                          
+              mov       outSample + 1, initDcLevel
+              wypin     outSample + 2, pinDefinitions + 2              
+              mov       outSample + 2, initDcLevel
+              wypin     outSample + 3, pinDefinitions + 3    
+              mov       outSample + 3, initDcLevel
+              wypin     outSample + 4, pinDefinitions + 4              
+              mov       outSample + 4, initDcLevel
+              wypin     outSample + 5, pinDefinitions + 5                           
+              mov       outSample + 5, initDcLevel
+              wypin     outSample + 6, pinDefinitions + 6              
+              mov       outSample + 6, initDcLevel
+              wypin     outSample + 7, pinDefinitions + 7              
+              mov       outSample + 7, initDcLevel
+
+              waitse1                                     &apos; Wait until the right time to start next period
+              jmp      #mainLoop                          &apos; Begin the processing of the next sample period
+
+
+&apos;----------------------------------------------------------
+&apos; Below follows all the &quot;heavy&quot; signal proccessing effects       
+&apos;----------------------------------------------------------
+&apos;----------------------------------------------------------
+commonEffect0
+
+&apos;----------------------------------------------------------
+&apos;  Inc accs and generate RW pointers with random offsets
+&apos;----------------------------------------------------------
+             add       reverbPhase, reverbFrequency      wc    
+        if_c getrnd    reverbWriteOffset
+        if_c getrnd    reverbReadOffset1
+
+        if_c add       revUpdate, revUpdateFreq
+             cmp       revUpdate, revUpdateFreq          wz
+
+             mov       reverbPhase180, reverbPhase
+             add       reverbPhase180, V8000000             
+             cmp       reverbFrequency, reverbPhase180   wc
+       if_nc getrnd    reverbReadOffset2
+             mov       reverbWritePtr, reverbPhase
+             add       reverbWritePtr, reverbWriteOffset
+             mov       reverbReadPtr1, reverbPhase
+             add       reverbReadPtr1, reverbReadOffset1
+             mov       reverbReadPtr2, reverbPhase180
+             add       reverbReadPtr2, reverbReadOffset2
+             shr       reverbReadPtr1, #32 - 9
+             shr       reverbReadPtr2, #32 - 9
+             shr       reverbWritePtr, #32 - 9
+
+&apos;----------------------------------------------------------
+&apos;    Generate two triangle waveforms 180 degress apart  
+&apos;----------------------------------------------------------
+             abs       reverbTriangle1, reverbPhase            
+             fle       reverbTriangle1, ##$7FFF_FFFF
+                   not       reverbTriangle2, reverbTriangle1
+             zerox     reverbTriangle2, #30
+             shr       reverbTriangle1, #16
+             shr       reverbTriangle2, #16
+
+
+&apos;----------------------------------------------------------
+&apos;               Reverb signal processing
+&apos;----------------------------------------------------------
+             rdlut     sample + 0, reverbReadPtr1
+             muls      sample + 0, reverbTriangle1
+             sar       sample + 0, #16
+             rdlut     sample + 1, reverbReadPtr2
+             muls      sample + 1, reverbTriangle2
+             sar       sample + 1, #16
+             adds      sample + 0, sample + 1
+
+             rdlut     temp2, reverbWritePtr
+
+             &apos; Extract dry signal into temp
+             mov       temp, outSample + 0
+             add       temp, outSample + 1
+             sub       temp, ##65536
+             sar       temp, #1
+
+             &apos; Gain wet signal
+             mul       reverbTriangle1, ##13710
+             sar       reverbTriangle1, #15
+             muls      temp, reverbTriangle1
+             sar       temp, #16
+
+             &apos; Wet decay speed
+             adds      temp2, temp
+             muls      temp2, ##31781
+             sar       temp2, #15
+
+             if_z wrlut     temp2, reverbWritePtr
+
+
+             subs      outSample + 1, sample + 0
+             adds      outSample + 0, sample + 0
+
+             &apos;mov       outSample + 1, sample + 0
+             &apos;mov       outSample + 0, sample + 0
+             &apos;add       outSample + 0, ##32768
+             &apos;add       outSample + 1, ##32768
+
+
+commonEffect0_ret   ret
+
+&apos;----------------------------------------------------------
+commonEffect1
+             mov      highPassFilter, outSample + 0
+             add      highPassFilter, outSample + 1
+             sub      highPassFilter, ##65536
+             mov      filterResonance, #0
+             mov      filterCutoff, ##12192
+
+&apos;-----------------------------------------------------------
+             mov      temp, bandPassFilter  
+             muls     temp, filterResonance                &apos; Highpass filter
+             sar      temp, #5
+             subs     highPassFilter, bandPassFilter 
+             adds     highPassFilter, temp 
+             subs     highPassFilter, lowPassFilter 
+&apos;----------------------------------------------------------- 
+             mov      temp, highPassFilter 
+             muls     temp, filterCutoff                   &apos; Bandpass filter
+             sar      temp, #16
+             adds     bandPassFilter, temp 
+&apos;----------------------------------------------------------- 
+             mov      temp, bandPassFilter 
+             muls     temp, filterCutoff                   &apos; Lowpass filter 
+             sar      temp, #16 
+             adds     lowPassFilter, temp 
+&apos;-----------------------------------------------------------  
+             mov      temp, ##32768
+             adds     temp, lowPassFilter
+             adds     temp, bandPassFilter                 &apos; Enable filter types
+             &apos;adds     temp, highPassFilter
+             mov      outSample + 0, temp
+             mov      outSample + 1, temp
+
+
+
+
+commonEffect1_ret   ret
+&apos;----------------------------------------------------------
+commonEffect2
+commonEffect2_ret   ret
+&apos;----------------------------------------------------------
+commonEffect3
+commonEffect3_ret   ret
+&apos;----------------------------------------------------------
+commonEffect4
+commonEffect4_ret   ret
+commonEffect5
+commonEffect5_ret   ret
+commonEffect6
+commonEffect6_ret   ret
+commonEffect7
+commonEffect7_ret   ret
+
+&apos; Distortion effect
+inputEffect0
+              rfword    effectParameter+0            &apos; Read DC offset parameter
+              rfword    effectParameter+1            &apos; Read gain level parameter
+              rfword    effectParameter+2            &apos; Read wet/dry level parameter
+
+              signx     hubSample, #15               &apos; Fix hubSample sign extension
+              mov       signal, hubSample
+              signx     effectParameter+0, #15       &apos; Fix DC offset parameter sign extionsion
+
+              adds      signal, effectParameter+0
+
+              muls      signal, effectParameter+1
+              sar       signal, #8 
+
+              fles      signal, clipHigh
+              fges      signal, clipLow
+
+              scas      hubSample, effectParameter+2
+              mov       hubSample, #0
+
+              neg       effectParameter+2
+              add       effectParameter+2, ##8192
+
+              scas      signal, effectParameter+2
+              adds      hubSample, #0    
+
+
+inputEffect0_ret   ret
+
+inputEffect1
+inputEffect1_ret   ret
+inputEffect2
+inputEffect2_ret   ret
+inputEffect3
+inputEffect3_ret   ret
+inputEffect4
+inputEffect4_ret   ret
+inputEffect5
+inputEffect5_ret   ret
+inputEffect6
+inputEffect6_ret   ret
+inputEffect7
+inputEffect7_ret   ret
+
+
+&apos;----------------------------------------------------------
+&apos;                Variables / Constants / Data
+&apos;----------------------------------------------------------
+
+reverbPhase            long  0
+reverbPhase180         long  $8000_0000
+reverbWriteOffset      long  0
+reverbReadOffset1      long  0
+reverbReadOffset2      long  0
+reverbTriangle1        long  0
+reverbTriangle2        long  0
+V8000000               long  $8000_0000
+
+fixedConfigBits        long  %10100_00000000_00_00000_0
+initDcLevel            long  32768
+mask16                 long  $0000_ffff
+clipHigh               long  32767
+clipLow                long  -32768
+&apos;reverbFrequency        long  $0275319
+reverbFrequency        long  $0400_000
+
+revUpdate              long  0
+revUpdateFreq          long  $2000_0000
+attentionMask          long  0
+hiloChnMap             long  0
+
+phaseAccuNr            res   1
+filterCutoff           res   1
+filterResonance        res   1
+highPassFilter         res   1
+bandPassFilter         res   1
+lowPassFilter          res   1
+hiloChnMapPtr          res   1
+sample                 res   2
+reverbWritePtr         res   1
+reverbReadPtr1         res   1
+reverbReadPtr2         res   1
+delayCounter           res   1
+signal                 res   1
+outputSkipPattern      res   1
+samplePeriod           res   1
+dacMode                res   1
+nrInputs               res   1
+numberOfOutputs        res   1
+frequency              res   1
+bufferPointer          res   1
+triggerOffset          res   1
+loopSize               res   1
+optionsMask            res   1
+temp                   res   1
+temp2                  res   1
+itt                    res   1
+hubValue               res   1
+smartpinConfig         res   1
+hubSample              res   1
+phase                  res   1
+phaseCopy              res   1
+cogMemSamplePtr        res   1
+outputMixMask          res   1
+mixAmount              res   1
+phaseShiftAmount       res   1
+triggerOffsetPtr       res   1
+sendSignal             res   1
+pinDefinitions         res   8
+effectParameter        res   8
+outSample              res   8
+commonEffectSample     res   8
+
+                       fit   496     
+
+
+DAT
+inputEffectParams byte 6, 0, 0, 0, 0, 0, 0, 0
     </code></pre>
 </body>
