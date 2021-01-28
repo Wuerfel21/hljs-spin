@@ -2,7 +2,7 @@
 Language: Spin/Spin2
 Author: Ada Gottensträter
 Description: highlight.js language definition for Spin/Spin2 files
-Version: 1.2.2
+Version: 1.2.3
 Licensed as whatever you want it to be.
 */
 "use strict";
@@ -36,7 +36,7 @@ Licensed as whatever you want it to be.
     const PASM2_KEYWORDS = PASM_KEYWORDS +  'end _ret_ wcz orc orz andc andz xorc xorz '+
                                             'if_00 if_not_00 if_01 if_not_01 if_10 if_not_10 if_11 if_not_11 ';
     const GENERIC_BUILTINS = 'float trunc round and or not '; // builtins valid everywhere
-    const SPIN_BUILTINS =   'bytefill wordfill longfill bytemove wordmove longmove strsize strcomp lookup lookupz lookdown lookdownz'+ // Spin builtin functions
+    const SPIN_BUILTINS =   'bytefill wordfill longfill bytemove wordmove longmove strsize strcomp lookup lookupz lookdown lookdownz '+ // Spin builtin functions
                             'waitcnt waitpeq waitpne waitvid cogid coginit cogstop locknew lockret clkfreq clkmode clkset '; 
     const SPIN1_BUILTINS = SPIN_BUILTINS + 'lockset lockclr cognew chipver '
     const SPIN2_BUILTINS = SPIN_BUILTINS +  'hubset cogspin cogchk locktry lockrel lockchk cogatn pollatn waitatn getct pollct waitct waitus waitms getsec getms call regexec regload '+
@@ -83,7 +83,7 @@ Licensed as whatever you want it to be.
                         'x_pins_off x_pins_on x_write_off x_write_on x_alt_off x_alt_on ';
 
     const P2_REGISTERS =    'ijmp3 iret3 ijmp2 iret2 ijmp1 iret1 pa pb ptra ptrb dira dirb outa outb ina inb '+
-                            'pr0 pr1 pr2 pr3 pr4 pr5 pr6 pr7 pr7';
+                            'pr0 pr1 pr2 pr3 pr4 pr5 pr6 pr7 pr7 ';
 
     const P2_MNEMONICS =    'nop ror rol shr shl rcr rcl sar sal add addx adds addsx sub subx subs subsx cmp cmpx cmps cmpsx cmpr cmpm subr cmpsub fge fle fges fles sumc sumnc sumz sumnz '+
                             'testb testbn bitl bith bitc bitnc bitz bitnz bitrnd bitnot and andn or xor muxc muxnc muxz muxnz mov not abs neg negc negnc negz negnz '+
@@ -99,7 +99,7 @@ Licensed as whatever you want it to be.
                             'skip skipf execf getptr getbrk cogbrk brk setluts setcy setci setcq setcfrq setcmod setpiv setpix cogatn testp testpn '+
                             'dirl dirh dirc dirnc dirz dirnz dirrnd dirnot outl outh outc outnc outz outnz outrnd outnot fltl flth fltc fltnc fltz fltnz fltrnd fltnot '+
                             'drvl drvh drvc drvnc drvz drvnz drvrnd drvnot splitb mergeb splitw mergew seussf seussr rgbsqz rgbexp xoro32 rev rczr rczl wrc wrnc wrz wrnz modcz modc modz '+
-                            'setscp getscp call calla callb calld loc augs augd';
+                            'setscp getscp call calla callb calld loc augs augd ';
 
     const STRINGS = {
         className: 'string',
